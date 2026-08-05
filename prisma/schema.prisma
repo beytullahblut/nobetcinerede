@@ -1,0 +1,94 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum CategoryType {
+  VETERINER
+  DIS_KLINIGI
+  CILINGIR
+  OTO_LASTIK
+  OTO_CEKICI
+  ECZANE
+}
+
+enum RequestType {
+  CREATE // Yeni işletme ekleme talebi
+  UPDATE // Bilgi güncelleme talebi
+  DELETE // Kaydı kaldırma / silme talebi
+}
+
+enum RequestStatus {
+  PENDING  // Onay bekliyor
+  APPROVED // Onaylandı (işleme alındı)
+  REJECTED // Reddedildi
+}
+
+model Category {
+  id            String         @id @default(cuid())
+  name          String         // Örn: 7/24 Çekici veya Nöbetçi Eczane
+  slug          String         @unique // Örn: oto-cekici, nobetci-eczane
+  type          CategoryType
+  places        Place[]
+  placeRequests PlaceRequest[] // Karşı ilişki alanı eklendi
+  createdAt     DateTime       @default(now())
+}
+
+model Place {
+  id           String   @id @default(cuid())
+  name         String   // Örn: Güven Oto Çekici
+  slug         String   @unique
+  phone        String
+  address      String
+  city         String   // Örn: Bursa
+  district     String   // Örn: Nilüfer
+  latitude     Float?   // Harita ve konum araması için
+  longitude    Float?
+  is24Seven    Boolean  @default(true) // 7/24 açık mı?
+  isVerified   Boolean  @default(false) // Onaylı işletme mi? (Otomatik gelenler false başlar)
+  note         String?  // Örn: "Şehir içi ve şehir dışı çekici hizmeti."
+
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  requests   PlaceRequest[] // İşletmeye yapılan güncelleme/silme talepleri
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([city, district])
+  @@index([categoryId])
+}
+
+model PlaceRequest {
+  id          String        @id @default(cuid())
+  type        RequestType   // CREATE, UPDATE, DELETE
+  status      RequestStatus @default(PENDING) // PENDING, APPROVED, REJECTED
+
+  // Eğer var olan bir işletme güncelleniyor veya siliniyorsa bağlantı buraya kurulur
+  placeId     String?
+  place       Place?        @relation(fields: [placeId], references: [id], onDelete: SetNull)
+
+  // Talep edilen / önerilen veriler
+  name        String
+  phone       String
+  address     String
+  city        String
+  district    String
+  categoryId  String?
+  
+  // Moderatör panelinde kategori adını rahatça görebilmek için ilişki
+  category    Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  note        String?       // İşletme notu veya talep edenin açıklama gerekçesi
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@index([placeId])
+  @@index([categoryId])
+}
