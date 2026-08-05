@@ -17,14 +17,14 @@ async function SearchResults({ searchParams }: { searchParams: Promise<{ q?: str
     },
   });
 
-  const results = places.filter((place) => {
+  const results = places.filter((place: any) => {
     const q = initialQuery.toLowerCase().trim();
     if (!q) return true;
 
     const keywords = q.split(/\s+/).filter(Boolean);
     if (keywords.length === 0) return true;
 
-    return keywords.every((keyword) => {
+    return keywords.every((keyword: string) => {
       return (
         place.city.toLowerCase().includes(keyword) ||
         place.district.toLowerCase().includes(keyword) ||
@@ -81,7 +81,7 @@ async function SearchResults({ searchParams }: { searchParams: Promise<{ q?: str
         </p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {results.map((place) => {
+          {results.map((place: any) => {
             const destinationQuery = `${place.name}, ${place.address}, ${place.district}/${place.city}`;
             const categoryName = place.category?.name || "Acil Hizmet";
 

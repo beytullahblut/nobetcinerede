@@ -66,7 +66,6 @@ async function handleRequestAction(formData: FormData) {
 }
 
 export default async function ModeratorPanel() {
-  // category ilişkisi kaldırıldı, sadece place dahil ediliyor
   const pendingRequests = await prisma.placeRequest.findMany({
     where: { status: "PENDING" },
     include: { place: true },
@@ -89,7 +88,7 @@ export default async function ModeratorPanel() {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {pendingRequests.map((req) => (
+            {pendingRequests.map((req: any) => (
               <div
                 key={req.id}
                 style={{
