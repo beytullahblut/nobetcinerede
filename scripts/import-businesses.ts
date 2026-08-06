@@ -1,3 +1,4 @@
+// test-import.ts
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -39,6 +40,12 @@ const CATEGORIES = [
 async function testImport() {
   console.log("🧪 Yerel test veri aktarımı başlatıldı...");
 
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) {
+    console.error("❌ Hata: GOOGLE_PLACES_API_KEY tanımlı değil!");
+    return;
+  }
+
   for (const city of CITIES) {
     for (const cat of CATEGORIES) {
       let categoryRecord = await prisma.category.findUnique({
@@ -56,33 +63,39 @@ async function testImport() {
         });
       }
 
-      const query = `${city} ${cat.keyword}`;
+      const query = `${city} 7/24 ${cat.keyword}`;
       console.log(`🔍 Google Places Sorgulanıyor: ${query}`);
 
       try {
-        const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-        if (!apiKey) {
-          console.error("❌ Hata: GOOGLE_PLACES_API_KEY tanımlı değil!");
-          return;
-        }
+        // 1. Aşama: Text Search ile mekanların Place ID'lerini bulma
+        const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${apiKey}&language=tr`;
 
-        const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${apiKey}&language=tr`;
-
-        const response = await fetch(url);
+        const response = await fetch(searchUrl);
         const data = await response.json();
 
-        // 🔍 Google'ın döndürdüğü ham yanıtı detaylı görmek için eklendi:
-        console.log("🌐 Google API Ham Yanıtı:", JSON.stringify(data, null, 2));
+        console.log(`📦 Google'dan gelen sonuç status: ${data.status}`);
+        console.log(`📦 Bulunan sonuç sayısı: ${data.results?.length || 0}`);
 
-        console.log(`📦 Google'dan gelen sonuç sayısı: ${data.results?.length || 0}`);
-
-        if (data.results && Array.isArray(data.results)) {
+        if (data.status === "OK" && data.results && Array.isArray(data.results)) {
           for (const place of data.results) {
             const name = place.name;
             const address = place.formatted_address || "Adres belirtilmemiş";
-            const phone = "Belirtilmemiş"; 
             const lat = place.geometry?.location?.lat || null;
             const lng = place.geometry?.location?.lng || null;
+            const placeId = place.place_id; // Detay için gerekli
+
+            let phone = "Belirtilmemiş";
+
+            // 2. Aşama: Her mekanın Place ID'si ile telefon numarasını çekme (Place Details API)
+            if (placeId) {
+              const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=formatted_phone_number,international_phone_number&key=${apiKey}&language=tr`;
+              const detailsResponse = await fetch(detailsUrl);
+              const detailsData = await detailsResponse.json();
+
+              if (detailsData.status === "OK" && detailsData.result) {
+                phone = detailsData.result.formatted_phone_number || detailsData.result.international_phone_number || "Belirtilmemiş";
+              }
+            }
 
             if (name) {
               const baseSlug = generateSlug(`${city}-${name}`);
@@ -106,14 +119,14 @@ async function testImport() {
                     categoryId: categoryRecord.id,
                   },
                 });
-                console.log(`✅ Eklendi: ${name}`);
+                console.log(`✅ Eklendi: ${name} (${phone})`);
               } else {
                 console.log(`ℹ️ Zaten mevcut: ${name}`);
               }
             }
           }
         } else {
-          console.log(`⚠️ Sonuç bulunamadı. API Yanıtı status:`, data.status);
+          console.log(`⚠️ Sonuç bulunamadı veya API Hatası. Durum:`, data.status, data.error_message || "");
         }
       } catch (error) {
         console.error(`❌ Hata oluştu (${query}):`, error);
