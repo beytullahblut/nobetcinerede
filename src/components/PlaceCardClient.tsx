@@ -41,6 +41,7 @@ export default function PlaceCardClient({ place, destinationQuery, categoryName 
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
+          {/* Sabit metin kaldırıldı, dışarıdan gelen gerçek kategori adı basılıyor */}
           <span
             style={{
               fontSize: "0.75rem",

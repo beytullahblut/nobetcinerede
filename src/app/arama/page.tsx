@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { Search } from "lucide-react";
 import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import PlaceCardClient from "@/components/PlaceCardClient";
@@ -14,38 +13,36 @@ async function SearchResults({
   const selectedCity = resolvedParams.city || "";
   const selectedDistrict = resolvedParams.district || "";
 
-  // Tüm yerleri ve benzersiz il/ilçe listesini çekmek için sorgular
-  const [places, rawCities, rawDistricts] = await Promise.all([
-    prisma.place.findMany({
-      include: {
-        category: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    }),
-    prisma.place.findMany({ select: { city: true }, distinct: ['city'] }),
-    selectedCity 
-      ? prisma.place.findMany({ where: { city: selectedCity }, select: { district: true }, distinct: ['district'] })
-      : prisma.place.findMany({ select: { district: true }, distinct: ['district'] })
-  ]);
+  // Veritabanı Seviyesinde Kesin Filtreleme (Sadece seçilen il ve ilçe veritabanından çekilir)
+  const whereCondition: any = {};
 
-  const cities = rawCities.map(c => c.city).filter(Boolean).sort();
-  const districts = rawDistricts.map(d => d.district).filter(Boolean).sort();
+  if (selectedCity) {
+    whereCondition.city = {
+      equals: selectedCity,
+      mode: "insensitive", // Büyük/küçük harf duyarlılığını ortadan kaldırır
+    };
+  }
 
-  // Filtreleme Mantığı (İl, İlçe ve Metin/Kelime Bazlı)
+  if (selectedDistrict) {
+    whereCondition.district = {
+      equals: selectedDistrict,
+      mode: "insensitive",
+    };
+  }
+
+  // Verileri ve kategorileri doğrudan filtrelenmiş şekilde çekiyoruz
+  const places = await prisma.place.findMany({
+    where: whereCondition,
+    include: {
+      category: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  // Eğer ek olarak arama kutusuna (q) kelime yazıldıysa sadece ad/adres/kategori bazlı süzme yapıyoruz
   const results = places.filter((place: any) => {
-    // 1. İl Filtresi
-    if (selectedCity && place.city.toLowerCase() !== selectedCity.toLowerCase()) {
-      return false;
-    }
-
-    // 2. İlçe Filtresi
-    if (selectedDistrict && place.district.toLowerCase() !== selectedDistrict.toLowerCase()) {
-      return false;
-    }
-
-    // 3. Metin / Anahtar Kelime Filtresi
     const q = initialQuery.toLowerCase().trim();
     if (!q) return true;
 
@@ -54,8 +51,6 @@ async function SearchResults({
 
     return keywords.every((keyword: string) => {
       return (
-        place.city.toLowerCase().includes(keyword) ||
-        place.district.toLowerCase().includes(keyword) ||
         place.name.toLowerCase().includes(keyword) ||
         place.address.toLowerCase().includes(keyword) ||
         (place.category && place.category.name.toLowerCase().includes(keyword))
@@ -65,131 +60,35 @@ async function SearchResults({
 
   return (
     <main className="container" style={{ padding: "2rem 1rem", maxWidth: "1000px", margin: "0 auto" }}>
-      {/* Filtreleme Formu */}
-      <form 
-        action="/arama" 
-        method="GET" 
-        style={{ 
-          display: "grid", 
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", 
-          gap: "0.75rem", 
-          marginBottom: "2rem",
-          backgroundColor: "#ffffff",
-          padding: "1.5rem",
-          borderRadius: "12px",
-          border: "1px solid #e2e8f0",
-          boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)"
-        }}
-      >
-        {/* İl Seçimi */}
-        <div>
-          <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.3rem", color: "#475569" }}>
-            İl Seçin
-          </label>
-          <select
-            name="city"
-            defaultValue={selectedCity}
-            onChange={(e) => {
-              e.target.form?.submit();
-            }}
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-              fontSize: "0.95rem",
-              backgroundColor: "#ffffff",
-            }}
-          >
-            <option value="">Tüm İller</option>
-            {cities.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* İlçe Seçimi */}
-        <div>
-          <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.3rem", color: "#475569" }}>
-            İlçe Seçin
-          </label>
-          <select
-            name="district"
-            defaultValue={selectedDistrict}
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-              fontSize: "0.95rem",
-              backgroundColor: "#ffffff",
-            }}
-          >
-            <option value="">Tüm İlçeler</option>
-            {districts.map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Anahtar Kelime / Hizmet */}
-        <div>
-          <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.3rem", color: "#475569" }}>
-            Hizmet / İşletme Adı
-          </label>
-          <input
-            type="text"
-            name="q"
-            defaultValue={initialQuery}
-            placeholder="Örn: Veteriner, Diş..."
-            style={{
-              width: "100%",
-              padding: "0.75rem",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-              fontSize: "0.95rem",
-              backgroundColor: "#ffffff",
-            }}
-          />
-        </div>
-
-        {/* Buton Alanı */}
-        <div style={{ display: "flex", alignItems: "flex-end" }}>
-          <button
-            type="submit"
-            style={{
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "0.5rem",
-              padding: "0.75rem 1.5rem",
-              backgroundColor: "#dc2626",
-              color: "#ffffff",
-              border: "none",
-              borderRadius: "8px",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
-          >
-            <Search size={18} /> Filtrele / Ara
-          </button>
-        </div>
-      </form>
-
-      <h2 style={{ fontSize: "1.3rem", fontWeight: 800, marginBottom: "1rem", color: "#0f172a" }}>
-        Arama Sonuçları ({results.length})
-      </h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+        <h2 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#0f172a" }}>
+          {selectedCity ? `${selectedCity} / ${selectedDistrict || "Tüm İlçeler"}` : "Arama Sonuçları"} ({results.length})
+        </h2>
+        <Link 
+          href="/" 
+          style={{ fontSize: "0.9rem", color: "#dc2626", fontWeight: 600, textDecoration: "none" }}
+        >
+          ← Ana Sayfaya Dön
+        </Link>
+      </div>
 
       {results.length === 0 ? (
-        <p style={{ color: "#64748b" }}>
-          Aradığınız kriterlere uygun açık nöbetçi işletme bulunamadı.
-        </p>
+        <div style={{ backgroundColor: "#ffffff", padding: "2rem", borderRadius: "12px", textAlign: "center", border: "1px solid #e2e8f0" }}>
+          <p style={{ color: "#64748b", fontSize: "1rem" }}>
+            Seçtiğiniz kriterlere uygun açık nöbetçi işletme bulunamadı.
+          </p>
+          <Link 
+            href="/" 
+            style={{ display: "inline-block", marginTop: "1rem", padding: "0.5rem 1rem", backgroundColor: "#dc2626", color: "#fff", borderRadius: "6px", textDecoration: "none", fontWeight: 600 }}
+          >
+            Ana Sayfaya Dön
+          </Link>
+        </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {results.map((place: any) => {
             const destinationQuery = `${place.name}, ${place.address}, ${place.district}/${place.city}`;
-            const categoryName = place.category?.name || "Acil Hizmet";
+            const categoryName = place.category?.name || "Nöbetçi İşletme";
 
             return (
               <PlaceCardClient 

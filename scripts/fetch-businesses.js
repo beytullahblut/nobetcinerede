@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Doğrudan çalıştırmak istediğiniz grubu buradan seçebilirsiniz ('grup1', 'grup2', 'grup3', 'grup4')
-const activeGroup = 'grup4';
+const activeGroup = 'grup1';
 
 const cityGroups = {
   grup1: [
@@ -39,6 +39,38 @@ function generateSlug(text) {
     .replace(/[^a-z0-9]/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '') + '-' + Math.random().toString(36).substring(2, 7);
+}
+
+// Geliştirilmiş Akıllı İlçe Ayıklama Fonksiyonu
+function extractDistrict(address, city) {
+  if (!address) return 'Merkez';
+  
+  // 1. Yol: "İlçe/Şehir" veya "İlçe / Şehir" formatını arar
+  const regexSlash = new RegExp(`([\\wÇĞİÖŞÜçğıöşü\\s]+)\\/\\s?${city}`, 'i');
+  const matchSlash = address.match(regexSlash);
+  
+  if (matchSlash && matchSlash[1]) {
+    const parts = matchSlash[1].trim().split(/[\s,]+/);
+    const lastPart = parts[parts.length - 1];
+    if (lastPart && lastPart.toLowerCase() !== city.toLowerCase()) {
+      return lastPart;
+    }
+  }
+  
+  // 2. Yol: Eğer slash yoksa, adres metninde şehir adını arayıp hemen öncesindeki kelimeyi alır
+  const cleanAddress = address.replace(/[^\wÇĞİÖŞÜçğıöşü\s]/g, ' ');
+  const words = cleanAddress.split(/\s+/).filter(Boolean);
+  const cityIndex = words.findIndex(w => w.toLowerCase() === city.toLowerCase());
+  
+  if (cityIndex > 0) {
+    const potentialDistrict = words[cityIndex - 1];
+    // Eğer önceki kelime posta kodu (sayı) değilse ve şehir adının kendisi değilse ilçe kabul et
+    if (potentialDistrict && !/^\d+$/.test(potentialDistrict) && potentialDistrict.toLowerCase() !== city.toLowerCase()) {
+      return potentialDistrict;
+    }
+  }
+  
+  return 'Merkez';
 }
 
 async function scrapeGroup() {
@@ -122,7 +154,7 @@ async function scrapeGroup() {
             phone: item.phone || '05000000000',
             address: item.address || `${city} Merkez`,
             city: city,
-            district: 'Merkez',
+            district: extractDistrict(item.address, city),
             note: item.note || '7/24 Acil Hizmet',
             categoryName: finalCategory
           });

@@ -95,17 +95,19 @@ export default function HomePage() {
     setSelectedDistrict("");
   };
 
-  const handleSearch = (e: React.FormEvent) => {
+const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    let queryParts = [];
     
-    // İl ve ilçe adını doğrudan ekliyoruz
-    if (selectedCityName) queryParts.push(selectedCityName);
-    if (selectedDistrict) queryParts.push(selectedDistrict);
-    if (selectedCategory) queryParts.push(selectedCategory);
+    const params = new URLSearchParams();
+    
+    // İl ve ilçeyi doğrudan kendi parametreleri olarak ekliyoruz
+    if (selectedCityName) params.append("city", selectedCityName);
+    if (selectedDistrict) params.append("district", selectedDistrict);
+    
+    // Kategoriyi veya arama metnini q parametresi olarak ekliyoruz
+    if (selectedCategory) params.append("q", selectedCategory);
 
-    const query = queryParts.join(" ");
-    router.push(`/arama?q=${encodeURIComponent(query)}`);
+    router.push(`/arama?${params.toString()}`);
   };
 
   return (
