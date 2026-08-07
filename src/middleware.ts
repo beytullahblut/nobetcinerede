@@ -1,16 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export function middleware(req: NextRequest) {
-  // Sadece yönetim paneli sayfalarını korumaya al (Örn: /admin ile başlayanlar)
+  // Sadece yönetim paneli sayfalarını korumaya al
   if (req.nextUrl.pathname.startsWith("/yonetim")) {
     const basicAuth = req.headers.get("authorization");
 
     if (basicAuth) {
-      const authValue = basicAuth.split(" ")[1];
-      const [user, pwd] = atob(authValue).split(":");
+      try {
+        const authValue = basicAuth.split(" ")[1];
+        // atob yerine Buffer kullanarak base64 çözme (Daha güvenli ve uyumlu)
+        const [user, pwd] = Buffer.from(authValue, "base64").toString("ascii").split(":");
 
-      if (user === process.env.ADMIN_USER && pwd === process.env.ADMIN_PASS) {
-        return NextResponse.next();
+        // process.env değerlerinin tanımlı olduğundan emin oluyoruz
+        if (
+          user === process.env.ADMIN_USER && 
+          pwd === process.env.ADMIN_PASS &&
+          process.env.ADMIN_USER !== undefined &&
+          process.env.ADMIN_PASS !== undefined
+        ) {
+          return NextResponse.next();
+        }
+      } catch (error) {
+        console.error("Auth hatası:", error);
       }
     }
 
