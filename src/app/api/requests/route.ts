@@ -5,7 +5,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const {
-      type,        // "CREATE", "UPDATE", "DELETE"
+      type,       // "CREATE", "UPDATE", "DELETE"
       name,
       phone,
       address,
@@ -13,41 +13,62 @@ export async function POST(req: Request) {
       district,
       categoryId,
       note,
-      placeId,     // UPDATE veya DELETE işleminde güncellenecek işletmenin ID'si
+      placeId,    // UPDATE veya DELETE işleminde güncellenecek işletmenin ID'si
     } = body;
 
-    // Zorunlu alanların kontrolü
-    if (!type || !name || !phone || !address || !city || !district) {
+    // 1. İşlem tipine göre dinamik zorunlu alan kontrolü
+    if (!type) {
       return NextResponse.json(
-        { error: "Zorunlu alanlar eksik." },
+        { error: "İşlem tipi (type) eksik." },
         { status: 400 }
       );
+    }
+
+    // Eğer işlem DELETE ise sadece placeId zorunludur
+    if (type === "DELETE") {
+      if (!placeId) {
+        return NextResponse.json(
+          { error: "Silinecek işletme ID'si (placeId) eksik." },
+          { status: 400 }
+        );
+      }
+    } else {
+      // CREATE veya UPDATE için genel alanlar zorunludur
+      if (!name || !phone || !address || !city || !district) {
+        return NextResponse.json(
+          { error: "Zorunlu alanlar eksik." },
+          { status: 400 }
+        );
+      }
     }
 
     // 1. Arka Planda Adresi Koordinata Çevirme (Geocoding - OpenStreetMap Nominatim)
     let latitude: number | null = null;
     let longitude: number | null = null;
 
-    try {
-      const fullAddressQuery = `${address}, ${district}, ${city}, Türkiye`;
-      const geoRes = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          fullAddressQuery
-        )}`,
-        {
-          headers: {
-            "User-Agent": "DurustevApp/1.0",
-          },
-        }
-      );
-      const geoData = await geoRes.json();
+    // DELETE işleminde adrese gerek olmadığı için geocoding'i atlayabiliriz
+    if (type !== "DELETE") {
+      try {
+        const fullAddressQuery = `${address}, ${district}, ${city}, Türkiye`;
+        const geoRes = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            fullAddressQuery
+          )}`,
+          {
+            headers: {
+              "User-Agent": "DurustevApp/1.0",
+            },
+          }
+        );
+        const geoData = await geoRes.json();
 
-      if (geoData && geoData.length > 0) {
-        latitude = parseFloat(geoData[0].lat);
-        longitude = parseFloat(geoData[0].lon);
+        if (geoData && geoData.length > 0) {
+          latitude = parseFloat(geoData[0].lat);
+          longitude = parseFloat(geoData[0].lon);
+        }
+      } catch (geoError) {
+        console.error("Geocoding dönüştürme hatası:", geoError);
       }
-    } catch (geoError) {
-      console.error("Geocoding dönüştürme hatası:", geoError);
     }
 
     // 2. Doğrudan Yeni İşletme Ekleme (CREATE)
@@ -107,16 +128,17 @@ export async function POST(req: Request) {
     }
 
     // 3. Güncelleme / Silme veya Onay Bekleyen Talep Oluşturma (PlaceRequest)
+    // DELETE işleminde name, phone vb. alanlar boş geleceği için undefined yerine null gitmesini sağlıyoruz.
     const newRequest = await prisma.placeRequest.create({
       data: {
         type,
         status: "PENDING",
         placeId: placeId || null,
-        name,
-        phone,
-        address,
-        city,
-        district,
+        name: name || null,
+        phone: phone || null,
+        address: address || null,
+        city: city || null,
+        district: district || null,
         categoryId: categoryId || null,
         note: note || null,
       },
