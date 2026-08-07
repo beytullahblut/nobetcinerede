@@ -1,147 +1,134 @@
-// test-import.ts
-import dotenv from "dotenv";
-dotenv.config();
+import 'dotenv/config'; // .env dosyasını okuması için en başta olmalı
+import * as fs from 'fs';
+import * as path from 'path';
+import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import pkg from 'pg';
 
-import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
+const { Pool } = pkg;
 
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
-  console.error("❌ Hata: DATABASE_URL tanımlı değil veya .env dosyası okunamadı!");
+  console.error("Hata: DATABASE_URL ortam değişkeni bulunamadı! Lütfen .env dosyanızı kontrol edin.");
   process.exit(1);
 }
 
 const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
+
 const prisma = new PrismaClient({ adapter });
+const dataDir = path.join(process.cwd(), 'data', 'cities');
 
 function generateSlug(text: string): string {
   const trMap: { [key: string]: string } = {
-    ç: "c", Ç: "c", ğ: "g", Ğ: "g", ı: "i", İ: "i",
-    ö: "o", Ö: "o", ş: "s", Ş: "s", ü: "u", Ü: "u",
+    'ç': 'c', 'Ç': 'c', 'ğ': 'g', 'Ğ': 'g', 'ı': 'i', 'İ': 'i',
+    'ö': 'o', 'Ö': 'o', 'ş': 's', 'Ş': 's', 'ü': 'u', 'Ü': 'u'
   };
   return text
-    .replace(/[çÇğĞıİöÖşŞüÜ]/g, (match) => trMap[match])
+    .replace(/[çÇğĞıİöÖşŞüÜ]/g, match => trMap[match])
     .toLowerCase()
-    .replace(/[^a-z0-9 -]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
+    .replace(/[^a-z0-9 -]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
 }
 
-const CITIES = ["Bursa"];
-const CATEGORIES = [
-  { keyword: "oto çekici", categoryName: "7/24 Oto Çekici", categorySlug: "oto-cekici", type: "OTO_CEKICI" as any },
-  { keyword: "çilingir", categoryName: "Nöbetçi Çilingir", categorySlug: "cilingir", type: "CILINGIR" as any }
-];
+async function main() {
+  try {
+    if (!fs.existsSync(dataDir)) {
+      console.error(`Hata: '${dataDir}' klasörü bulunamadı!`);
+      return;
+    }
 
-async function testImport() {
-  console.log("🧪 Yerel test veri aktarımı başlatıldı...");
+    const categories = await prisma.category.findMany();
+    const getCategoryIdByNameOrContent = (text: string): string | null => {
+      const lower = text.toLowerCase();
+      if (lower.includes('veteriner') || lower.includes('vet') || (lower.includes('klinik') && !lower.includes('diş'))) {
+        return categories.find(c => c.type === 'VETERINER')?.id || null;
+      }
+      if (lower.includes('diş') || lower.includes('dental') || lower.includes('poliklinik') || lower.includes('hastanesi')) {
+        return categories.find(c => c.type === 'DIS_KLINIGI')?.id || null;
+      }
+      if (lower.includes('çilingir') || lower.includes('anahtar') || lower.includes('kilit')) {
+        return categories.find(c => c.type === 'CILINGIR')?.id || null;
+      }
+      if (lower.includes('lastik') || lower.includes('lastikçi')) {
+        return categories.find(c => c.type === 'OTO_LASTIK')?.id || null;
+      }
+      if (lower.includes('çekici') || lower.includes('kurtarma') || lower.includes('yol yardım')) {
+        return categories.find(c => c.type === 'OTO_CEKICI')?.id || null;
+      }
+      return categories[0]?.id || null;
+    };
 
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) {
-    console.error("❌ Hata: GOOGLE_PLACES_API_KEY tanımlı değil!");
-    return;
-  }
+    const files = fs.readdirSync(dataDir);
+    const jsonFiles = files.filter(file => path.extname(file).toLowerCase() === '.json');
 
-  for (const city of CITIES) {
-    for (const cat of CATEGORIES) {
-      let categoryRecord = await prisma.category.findUnique({
-        where: { slug: cat.categorySlug },
-      });
+    console.log(`Toplam ${jsonFiles.length} adet JSON dosyası bulundu.`);
 
-      if (!categoryRecord) {
-        console.log(`✨ Kategori oluşturuluyor: ${cat.categoryName}`);
-        categoryRecord = await prisma.category.create({
-          data: {
-            name: cat.categoryName,
-            slug: cat.categorySlug,
-            type: cat.type,
+    for (const file of jsonFiles) {
+      const filePath = path.join(dataDir, file);
+      console.log(`İşleniyor: ${file}`);
+
+      const fileContent = fs.readFileSync(filePath, 'utf-8');
+      
+      let records: any[];
+      try {
+        records = JSON.parse(fileContent);
+      } catch (parseError) {
+        console.error(`Hata: '${file}' dosyası geçerli bir JSON formatında değil!`);
+        continue;
+      }
+
+      if (!Array.isArray(records)) {
+        console.warn(`Uyarı: '${file}' dosyası bir dizi içermiyor, atlanıyor.`);
+        continue;
+      }
+
+      for (const item of records) {
+        if (!item.name) continue;
+
+        const slug = item.slug ? item.slug : generateSlug(item.name) + '-' + Math.random().toString(36).substring(2, 6);
+        const categoryId = item.categoryId ? item.categoryId : getCategoryIdByNameOrContent(item.name + ' ' + (item.note || ''));
+
+        if (!categoryId) {
+          console.warn(`Kategori bulunamadı, atlanıyor: ${item.name}`);
+          continue;
+        }
+
+        await prisma.place.upsert({
+          where: { slug: slug },
+          update: {
+            name: item.name,
+            phone: item.phone || '',
+            address: item.address || '',
+            city: item.city || 'Bilinmiyor',
+            district: item.district || 'Bilinmiyor',
+            note: item.note || null,
+            categoryId: categoryId,
+          },
+          create: {
+            name: item.name,
+            slug: slug,
+            phone: item.phone || '',
+            address: item.address || '',
+            city: item.city || 'Bilinmiyor',
+            district: item.district || 'Bilinmiyor',
+            note: item.note || null,
+            categoryId: categoryId,
           },
         });
       }
-
-      const query = `${city} 7/24 ${cat.keyword}`;
-      console.log(`🔍 Google Places Sorgulanıyor: ${query}`);
-
-      try {
-        // 1. Aşama: Text Search ile mekanların Place ID'lerini bulma
-        const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${apiKey}&language=tr`;
-
-        const response = await fetch(searchUrl);
-        const data = await response.json();
-
-        console.log(`📦 Google'dan gelen sonuç status: ${data.status}`);
-        console.log(`📦 Bulunan sonuç sayısı: ${data.results?.length || 0}`);
-
-        if (data.status === "OK" && data.results && Array.isArray(data.results)) {
-          for (const place of data.results) {
-            const name = place.name;
-            const address = place.formatted_address || "Adres belirtilmemiş";
-            const lat = place.geometry?.location?.lat || null;
-            const lng = place.geometry?.location?.lng || null;
-            const placeId = place.place_id; // Detay için gerekli
-
-            let phone = "Belirtilmemiş";
-
-            // 2. Aşama: Her mekanın Place ID'si ile telefon numarasını çekme (Place Details API)
-            if (placeId) {
-              const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=formatted_phone_number,international_phone_number&key=${apiKey}&language=tr`;
-              const detailsResponse = await fetch(detailsUrl);
-              const detailsData = await detailsResponse.json();
-
-              if (detailsData.status === "OK" && detailsData.result) {
-                phone = detailsData.result.formatted_phone_number || detailsData.result.international_phone_number || "Belirtilmemiş";
-              }
-            }
-
-            if (name) {
-              const baseSlug = generateSlug(`${city}-${name}`);
-              const slug = `${baseSlug}-${Math.random().toString(36).substring(2, 7)}`;
-
-              const existing = await prisma.place.findFirst({ where: { name, city } });
-
-              if (!existing) {
-                await prisma.place.create({
-                  data: {
-                    name,
-                    slug,
-                    phone,
-                    address,
-                    city,
-                    district: city,
-                    latitude: lat,
-                    longitude: lng,
-                    is24Seven: true,
-                    isVerified: false,
-                    categoryId: categoryRecord.id,
-                  },
-                });
-                console.log(`✅ Eklendi: ${name} (${phone})`);
-              } else {
-                console.log(`ℹ️ Zaten mevcut: ${name}`);
-              }
-            }
-          }
-        } else {
-          console.log(`⚠️ Sonuç bulunamadı veya API Hatası. Durum:`, data.status, data.error_message || "");
-        }
-      } catch (error) {
-        console.error(`❌ Hata oluştu (${query}):`, error);
-      }
+      console.log(`${file} başarıyla aktarıldı.`);
     }
-  }
 
-  console.log("🏁 Test aktarım süreci tamamlandı!");
+    console.log('Tüm veriler veritabanına başarıyla aktarıldı!');
+  } catch (error) {
+    console.error('Aktarım sırasında beklenmeyen bir hata oluştu:', error);
+  } finally {
+    await prisma.$disconnect();
+    await pool.end();
+  }
 }
 
-testImport()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main();
