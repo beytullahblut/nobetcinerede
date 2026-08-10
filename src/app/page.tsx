@@ -29,9 +29,7 @@ export default function HomePage() {
   const [selectedCityName, setSelectedCityName] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
-  const [selectedSort, setSelectedSort] = useState("rating_desc"); // Sıralama state'i eklendi
 
-  // il.json yapısını çözer ve Türkçe karakterlere uygun olarak A'dan Z'ye sıralar
   const ilList = useMemo(() => {
     let raw = ilData as any;
 
@@ -48,14 +46,12 @@ export default function HomePage() {
         name: String(item.name || item.il_adi || item.title || "Bilinmeyen İl").trim(),
       }));
 
-      // Türkçe alfabeye göre A-Z sıralama
       return parsed.sort((a, b) => a.name.localeCompare(b.name, "tr"));
     }
 
     return [];
   }, []);
 
-  // ilce.json yapısını çözer ve Türkçe karakterlere uygun olarak A'dan Z'ye sıralar
   const ilceList = useMemo(() => {
     let raw = ilceData as any;
 
@@ -73,14 +69,12 @@ export default function HomePage() {
         name: String(item.name || item.ilce_adi || item.title || "Bilinmeyen İlçe").trim(),
       }));
 
-      // Türkçe alfabeye göre A-Z sıralama
       return parsed.sort((a, b) => a.name.localeCompare(b.name, "tr"));
     }
 
     return [];
   }, []);
 
-  // Seçilen ile bağlı ilçeler (Sıralanmış listeden filtreler)
   const availableDistricts = useMemo(() => {
     if (!selectedCityId) return [];
     return ilceList.filter((d) => String(d.il_id) === String(selectedCityId));
@@ -93,7 +87,6 @@ export default function HomePage() {
     const foundCity = ilList.find((c) => String(c.id) === String(cityId));
     setSelectedCityName(foundCity ? foundCity.name : "");
 
-    // İl değiştiğinde ilçeyi sıfırla
     setSelectedDistrict("");
   };
 
@@ -102,22 +95,15 @@ export default function HomePage() {
     
     const params = new URLSearchParams();
     
-    // İl ve ilçeyi kendi parametreleri olarak ekliyoruz
     if (selectedCityName) params.append("city", selectedCityName);
     if (selectedDistrict) params.append("district", selectedDistrict);
-    
-    // Kategoriyi q parametresi olarak ekliyoruz
     if (selectedCategory) params.append("q", selectedCategory);
-
-    // Sıralama tercihini ekliyoruz
-    if (selectedSort) params.append("sort", selectedSort);
 
     router.push(`/arama?${params.toString()}`);
   };
 
   return (
     <div style={{ backgroundColor: "#f8fafc", minHeight: "100vh", color: "#0f172a" }}>
-      {/* HERO BÖLÜMÜ */}
       <section
         style={{
           backgroundColor: "#0f172a",
@@ -154,10 +140,9 @@ export default function HomePage() {
             İhtiyacınız Olduğu An En Yakın Nöbetçi Hizmeti Bulun
           </h1>
           <p style={{ color: "#94a3b8", fontSize: "1rem", marginBottom: "2rem" }}>
-            İl, ilçe ve akıllı sıralama filtreleriyle; gece veteriner, çilingir, lastikçi, oto çekici, diş kliniği ve nöbetçi eczane arayışlarınızda en doğru sonuca anında ulaşın.
+            İl ve ilçe filtreleriyle; gece veteriner, çilingir, lastikçi, oto çekici, diş kliniği ve nöbetçi eczane arayışlarınızda en doğru sonuca anında ulaşın.
           </p>
 
-          {/* DİNAMİK ARAMA FORMU */}
           <form
             onSubmit={handleSearch}
             style={{
@@ -173,8 +158,7 @@ export default function HomePage() {
               boxSizing: "border-box",
             }}
           >
-            {/* İL SEÇİMİ */}
-            <div style={{ flex: "1 1 140px" }}>
+            <div style={{ flex: "1 1 180px" }}>
               <select
                 value={selectedCityId}
                 onChange={handleCityChange}
@@ -197,8 +181,7 @@ export default function HomePage() {
               </select>
             </div>
 
-            {/* İLÇE SEÇİMİ */}
-            <div style={{ flex: "1 1 140px" }}>
+            <div style={{ flex: "1 1 180px" }}>
               <select
                 value={selectedDistrict}
                 onChange={(e) => setSelectedDistrict(e.target.value)}
@@ -223,8 +206,7 @@ export default function HomePage() {
               </select>
             </div>
 
-            {/* KATEGORİ SEÇİMİ */}
-            <div style={{ flex: "1 1 150px" }}>
+            <div style={{ flex: "1 1 200px" }}>
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
@@ -247,30 +229,7 @@ export default function HomePage() {
               </select>
             </div>
 
-            {/* SIRALAMA SEÇİMİ */}
             <div style={{ flex: "1 1 140px" }}>
-              <select
-                value={selectedSort}
-                onChange={(e) => setSelectedSort(e.target.value)}
-                style={{
-                  width: "100%",
-                  height: "48px",
-                  boxSizing: "border-box",
-                  color: "#0f172a",
-                  borderRadius: "8px",
-                  border: "1px solid #cbd5e1",
-                  padding: "0 0.75rem",
-                  backgroundColor: "#ffffff",
-                }}
-              >
-                <option value="rating_desc">⭐ En Yüksek Puan</option>
-                <option value="reviews_desc">💬 En Çok Yorum</option>
-                <option value="newest">🕒 En Yeni Eklenen</option>
-              </select>
-            </div>
-
-            {/* BUTON */}
-            <div style={{ flex: "1 1 120px" }}>
               <button
                 type="submit"
                 style={{
@@ -326,7 +285,6 @@ export default function HomePage() {
       </div>
 
       <main style={{ maxWidth: "1200px", margin: "0 auto", padding: "3rem 1rem" }}>
-        {/* HIZLI KATEGORİ KARTLARI */}
         <h2 style={{ fontSize: "1.3rem", fontWeight: 800, marginBottom: "1.2rem", color: "#0f172a" }}>
           Öne Çıkan Acil Hizmet Kategorileri
         </h2>
@@ -382,7 +340,6 @@ export default function HomePage() {
           })}
         </div>
 
-        {/* ÖZEL NÖBETÇİ ECZANE KART KISMI */}
         <div style={{ marginBottom: "3.5rem" }}>
           <Link
             href="/eczaneler"
@@ -407,7 +364,7 @@ export default function HomePage() {
               <div>
                 <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#991b1b" }}>Türkiye Geneli Nöbetçi Eczaneler Listesi</h3>
                 <p style={{ fontSize: "0.88rem", color: "#64748b", marginTop: "0.2rem" }}>
-                  Tüm il, ilçe ve sıralama filtreleriyle güncel nöbetçi eczanelere tek tıkla anında ulaşın.
+                  Tüm il ve ilçe filtreleriyle güncel nöbetçi eczanelere tek tıkla anında ulaşın.
                 </p>
               </div>
             </div>
@@ -417,7 +374,6 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {/* MİSYON & NEDEN VARIZ BÖLÜMÜ */}
         <section
           style={{
             backgroundColor: "#ffffff",
@@ -428,15 +384,12 @@ export default function HomePage() {
           }}
         >
           <div style={{ maxWidth: "750px", margin: "0 auto", textAlign: "center" }}>
-            <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "#dc2626", textTransform: "uppercase" }}>
-              Akıllı Arama ve Sıralama Altyapısı
-            </span>
             <h2 style={{ fontSize: "1.6rem", fontWeight: 800, marginTop: "0.4rem", marginBottom: "1rem" }}>
-              nobetcinerede.com Ne İçin Var? Amaçlarımız Neler?
+              nobetcinerede.com Ne İçin Var?
             </h2>
             <p style={{ color: "#475569", fontSize: "0.95rem", lineHeight: 1.6, marginBottom: "2rem" }}>
               Gece yarısı veteriner, kapıda kaldığınızda çilingir, yolda kaldığınızda çekici ya da lastikçi ararken zamanla yarışırsınız.
-              Gelişmiş il/ilçe filtreleri ve puana/yoruma göre sıralama seçeneklerimizle; en acil anlarınızda konumunuza en yakın ve en yüksek puanlı aktif işletmelere saniyeler içinde ulaşmanızı sağlıyoruz.
+              Gelişmiş il/ilçe filtrelerimizle; en acil anlarınızda konumunuza en yakın aktif işletmelere saniyeler içinde ulaşmanızı sağlıyoruz.
             </p>
           </div>
 
@@ -448,14 +401,6 @@ export default function HomePage() {
               marginTop: "1.5rem",
             }}
           >
-            <div style={{ backgroundColor: "#f8fafc", padding: "1.25rem", borderRadius: "12px", border: "1px solid #f1f5f9" }}>
-              <SlidersHorizontal size={24} color="#dc2626" style={{ marginBottom: "0.5rem" }} />
-              <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "0.25rem" }}>Akıllı Sıralama & Filtreleme</h3>
-              <p style={{ fontSize: "0.85rem", color: "#64748b" }}>
-                En yüksek puanlı, en çok yorum alan veya en yeni eklenen nöbetçi hizmetleri tercihlerinize göre anında listeleyin.
-              </p>
-            </div>
-
             <div style={{ backgroundColor: "#f8fafc", padding: "1.25rem", borderRadius: "12px", border: "1px solid #f1f5f9" }}>
               <MapPin size={24} color="#2563eb" style={{ marginBottom: "0.5rem" }} />
               <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "0.25rem" }}>Doğrudan Harita Navigasyonu</h3>
@@ -471,10 +416,17 @@ export default function HomePage() {
                 Yeni nöbetçi kaydı anında yayına girer. Var olan ilan düzenlemeleri ve kaldırma talepleri editör incelemesinden geçer.
               </p>
             </div>
+
+            <div style={{ backgroundColor: "#f8fafc", padding: "1.25rem", borderRadius: "12px", border: "1px solid #f1f5f9" }}>
+              <Clock size={24} color="#f59e0b" style={{ marginBottom: "0.5rem" }} />
+              <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "0.25rem" }}>7/24 Kesintisiz Erişim</h3>
+              <p style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                Platformumuz üzerinden günün her saati güncel nöbetçi hizmet bilgilerine ücretsiz ulaşabilirsiniz.
+              </p>
+            </div>
           </div>
         </section>
 
-        {/* HUKUKİ SORUMLULUK & KVKK BİLGİLENDİRME BLOĞU */}
         <section
           style={{
             backgroundColor: "#fff8f8",

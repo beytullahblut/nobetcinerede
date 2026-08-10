@@ -14,7 +14,7 @@ async function SearchResults({
   const selectedDistrict = resolvedParams.district || "";
   const sortBy = resolvedParams.sort || "rating_desc"; // Varsayılan sıralama
 
-  // Veritabanı Seviyesinde Esnek Filtreleme
+  // Veritabanı Seviyesinde Esnek Filtreleme (İl, İlçe ve Kategori)
   const whereCondition: any = {};
 
   if (selectedCity) {
@@ -31,6 +31,32 @@ async function SearchResults({
     };
   }
 
+  // Kategori seçimi (q parametresi) veritabanı seviyesinde ilişki üzerinden filtreleniyor
+  if (initialQuery) {
+    whereCondition.OR = [
+      {
+        name: {
+          contains: initialQuery,
+          mode: "insensitive",
+        },
+      },
+      {
+        address: {
+          contains: initialQuery,
+          mode: "insensitive",
+        },
+      },
+      {
+        category: {
+          name: {
+            contains: initialQuery,
+            mode: "insensitive",
+          },
+        },
+      },
+    ];
+  }
+
   // Dinamik Sıralama Kriteri Belirleme
   let orderByCondition: any = [{ rating: "desc" }, { userRatingCount: "desc" }];
 
@@ -42,30 +68,13 @@ async function SearchResults({
     orderByCondition = [{ createdAt: "desc" }];
   }
 
-  // Verileri ve kategorileri filtrelenmiş ve sıralanmış şekilde çekiyoruz
-  const places = await prisma.place.findMany({
+  // Verileri doğrudan filtrelenmiş ve sıralanmış şekilde çekiyoruz
+  const results = await prisma.place.findMany({
     where: whereCondition,
     include: {
       category: true,
     },
     orderBy: orderByCondition,
-  });
-
-  // Arama kutusuna (q) kelime yazıldıysa filtreleme yapıyoruz
-  const results = places.filter((place: any) => {
-    const q = initialQuery.toLowerCase().trim();
-    if (!q) return true;
-
-    const keywords = q.split(/\s+/).filter(Boolean);
-    if (keywords.length === 0) return true;
-
-    return keywords.every((keyword: string) => {
-      return (
-        place.name.toLowerCase().includes(keyword) ||
-        place.address.toLowerCase().includes(keyword) ||
-        (place.category && place.category.name.toLowerCase().includes(keyword))
-      );
-    });
   });
 
   // URL parametrelerini koruyarak sıralama linki oluşturan yardımcı fonksiyon
@@ -82,7 +91,7 @@ async function SearchResults({
     <main className="container" style={{ padding: "2rem 1rem", maxWidth: "1000px", margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h2 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#0f172a" }}>
-          {selectedCity ? `${selectedCity} / ${selectedDistrict && selectedDistrict !== "Tüm İlçeler" ? selectedDistrict : "Tüm İlçeler"}` : "Arama Sonuçları"} ({results.length})
+          {selectedCity ? `${selectedCity} / ${selectedDistrict && selectedDistrict !== "Tüm İlçeler" ? selectedDistrict : "Tüm İlçeler"}` : "Arama Sonuçları"} {initialQuery ? `- "${initialQuery}"` : ""} ({results.length})
         </h2>
         <Link 
           href="/" 
