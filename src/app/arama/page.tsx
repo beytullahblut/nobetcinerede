@@ -13,35 +13,37 @@ async function SearchResults({
   const selectedCity = resolvedParams.city || "";
   const selectedDistrict = resolvedParams.district || "";
 
-  // Veritabanı Seviyesinde Kesin Filtreleme (Sadece seçilen il ve ilçe veritabanından çekilir)
+  // Veritabanı Seviyesinde Kesin Filtreleme
   const whereCondition: any = {};
 
   if (selectedCity) {
     whereCondition.city = {
       equals: selectedCity,
-      mode: "insensitive", // Büyük/küçük harf duyarlılığını ortadan kaldırır
+      mode: "insensitive",
     };
   }
 
-  if (selectedDistrict) {
+  if (selectedDistrict && selectedDistrict !== "Tüm İlçeler") {
     whereCondition.district = {
       equals: selectedDistrict,
       mode: "insensitive",
     };
   }
 
-  // Verileri ve kategorileri doğrudan filtrelenmiş şekilde çekiyoruz
+  // Verileri ve kategorileri filtrelenmiş şekilde çekiyoruz
+  // İsterseniz orderBy kısmını rating'e göre de ayarlayabilirsiniz
   const places = await prisma.place.findMany({
     where: whereCondition,
     include: {
       category: true,
     },
-    orderBy: {
-      createdAt: "desc",
-    },
+    orderBy: [
+      { rating: "desc" },         // Önce yüksek puanlılar
+      { userRatingCount: "desc" } // Sonra yorum sayısı fazla olanlar
+    ],
   });
 
-  // Eğer ek olarak arama kutusuna (q) kelime yazıldıysa sadece ad/adres/kategori bazlı süzme yapıyoruz
+  // Arama kutusuna (q) kelime yazıldıysa filtreleme yapıyoruz
   const results = places.filter((place: any) => {
     const q = initialQuery.toLowerCase().trim();
     if (!q) return true;
@@ -62,7 +64,7 @@ async function SearchResults({
     <main className="container" style={{ padding: "2rem 1rem", maxWidth: "1000px", margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
         <h2 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#0f172a" }}>
-          {selectedCity ? `${selectedCity} / ${selectedDistrict || "Tüm İlçeler"}` : "Arama Sonuçları"} ({results.length})
+          {selectedCity ? `${selectedCity} / ${selectedDistrict && selectedDistrict !== "Tüm İlçeler" ? selectedDistrict : "Tüm İlçeler"}` : "Arama Sonuçları"} ({results.length})
         </h2>
         <Link 
           href="/" 

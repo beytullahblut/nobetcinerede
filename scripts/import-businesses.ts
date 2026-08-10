@@ -18,6 +18,9 @@ interface BusinessItem {
   city: string;
   district: string;
   note: string;
+  rating?: number;          // Yeni eklendi
+  userRatingCount?: number; // Yeni eklendi
+  googleMapsUri?: string;   // Yeni eklendi
   categoryName: string;
 }
 
@@ -83,6 +86,9 @@ async function main() {
             city: b.city,
             district: b.district,
             note: b.note,
+            rating: b.rating || 0,                 // Google Puanı aktarılıyor
+            userRatingCount: b.userRatingCount || 0, // Toplam değerlendirme sayısı aktarılıyor
+            googleMapsUri: b.googleMapsUri || '',   // Google Maps harita / yorum linki aktarılıyor
             is24Seven: true,
             isVerified: false,
             categoryId: categoryId

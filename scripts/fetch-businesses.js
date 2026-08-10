@@ -30,7 +30,8 @@ async function searchPlacesWithAPI(query) {
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': API_KEY,
-      'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.shortFormattedAddress,places.nationalPhoneNumber,places.addressComponents,places.location'
+      // Google Puan, Değerlendirme Sayısı ve Harita Linki alanları FieldMask'e eklendi
+      'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.shortFormattedAddress,places.nationalPhoneNumber,places.addressComponents,places.location,places.rating,places.userRatingCount,places.googleMapsUri'
     },
     body: JSON.stringify({
       textQuery: query,
@@ -99,6 +100,9 @@ async function runApiScraper() {
             city: parsedLocation.city,
             district: parsedLocation.district,
             note: '7/24 Acil Hizmet',
+            rating: p.rating || 0,                 // Google Puanı (Örn: 4.5)
+            userRatingCount: p.userRatingCount || 0, // Toplam Yorum Sayısı (Örn: 50)
+            googleMapsUri: p.googleMapsUri || '',   // Google Haritalar / Yorum Linki
             categoryName: query.includes('Çilingir') ? 'Nöbetçi Çilingir' :
                         query.includes('Veteriner') ? 'Acil Veteriner' :
                         query.includes('Lastikçi') ? '7/24 Oto Lastikçi' :

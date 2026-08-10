@@ -38,26 +38,31 @@ model Category {
 }
 
 model Place {
-  id           String   @id @default(cuid())
-  name         String   // Örn: Güven Oto Çekici
-  slug         String   @unique
-  phone        String
-  address      String
-  city         String   // Örn: Bursa
-  district     String   // Örn: Nilüfer
-  latitude     Float?   // Harita ve konum araması için
-  longitude    Float?
-  is24Seven    Boolean  @default(true) // 7/24 açık mı?
-  isVerified   Boolean  @default(false) // Onaylı işletme mi? (Otomatik gelenler false başlar)
-  note         String?  // Örn: "Şehir içi ve şehir dışı çekici hizmeti."
+  id              String   @id @default(cuid())
+  name            String   // Örn: Güven Oto Çekici
+  slug            String   @unique
+  phone           String
+  address         String
+  city            String   // Örn: Bursa
+  district        String   // Örn: Nilüfer
+  latitude        Float?   // Harita ve konum araması için
+  longitude       Float?
+  is24Seven       Boolean  @default(true) // 7/24 açık mı?
+  isVerified      Boolean  @default(false) // Onaylı işletme mi? (Otomatik gelenler false başlar)
+  note            String?  // Örn: "Şehir içi ve şehir dışı çekici hizmeti."
 
-  categoryId String
-  category   Category @relation(fields: [categoryId], references: [id])
+  // --- YENİ EKLENEN GOOGLE PUAN VE LİNK ALANLARI ---
+  rating          Float?   // İşletmenin Google puanı (Örn: 4.5)
+  userRatingCount Int?     // Toplam değerlendirme sayısı (Örn: 128)
+  googleMapsUri   String?  // Google Haritalar detay/yorum bağlantı adresi
 
-  requests   PlaceRequest[] // İşletmeye yapılan güncelleme/silme talepleri
+  categoryId      String
+  category        Category @relation(fields: [categoryId], references: [id])
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  requests        PlaceRequest[] // İşletmeye yapılan güncelleme/silme talepleri
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([city, district])
   @@index([categoryId])
