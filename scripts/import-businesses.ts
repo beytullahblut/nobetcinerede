@@ -1,134 +1,110 @@
-import 'dotenv/config'; // .env dosyasını okuması için en başta olmalı
+import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 import * as fs from 'fs';
 import * as path from 'path';
-import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import pkg from 'pg';
 
-const { Pool } = pkg;
-
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-  console.error("Hata: DATABASE_URL ortam değişkeni bulunamadı! Lütfen .env dosyanızı kontrol edin.");
-  process.exit(1);
-}
+const connectionString = "postgresql://neondb_owner:npg_EACsmoV59jHK@ep-square-base-a2zeqq2g-pooler.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
 
 const pool = new Pool({ connectionString });
 const adapter = new PrismaPg(pool);
-
 const prisma = new PrismaClient({ adapter });
-const dataDir = path.join(process.cwd(), 'data', 'cities');
 
-function generateSlug(text: string): string {
-  const trMap: { [key: string]: string } = {
-    'ç': 'c', 'Ç': 'c', 'ğ': 'g', 'Ğ': 'g', 'ı': 'i', 'İ': 'i',
-    'ö': 'o', 'Ö': 'o', 'ş': 's', 'Ş': 's', 'ü': 'u', 'Ü': 'u'
-  };
-  return text
-    .replace(/[çÇğĞıİöÖşŞüÜ]/g, match => trMap[match])
-    .toLowerCase()
-    .replace(/[^a-z0-9 -]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-');
+interface BusinessItem {
+  name: string;
+  slug: string;
+  phone: string;
+  address: string;
+  city: string;
+  district: string;
+  note: string;
+  categoryName: string;
+}
+
+function getCategoryType(categoryName: string) {
+  if (categoryName.includes('Çilingir')) return 'CILINGIR';
+  if (categoryName.includes('Veteriner')) return 'VETERINER';
+  if (categoryName.includes('Lastikçi')) return 'OTO_LASTIK';
+  if (categoryName.includes('Çekici')) return 'OTO_CEKICI';
+  return 'DIS_KLINIGI';
 }
 
 async function main() {
-  try {
-    if (!fs.existsSync(dataDir)) {
-      console.error(`Hata: '${dataDir}' klasörü bulunamadı!`);
-      return;
+  console.log('🔄 Tüm grupların veritabanı aktarımı başlatılıyor...');
+
+  // İşlenecek grup dosyaları
+  const groups = ['grup1_firmalar', 'grup2_firmalar', 'grup3_firmalar', 'grup4_firmalar'];
+  
+  // 1. En başta veritabanındaki tüm eski kayıtları bir kez temizleyelim
+  console.log('🧹 Eski tüm Place kayıtları veritabanından temizleniyor...');
+  await prisma.place.deleteMany({});
+
+  let totalSuccessCount = 0;
+  const categoriesMap = new Map<string, string>();
+
+  for (const groupName of groups) {
+    const jsonPath = path.join(__dirname, `../data/cities/${groupName}.json`);
+    
+    if (!fs.existsSync(jsonPath)) {
+      console.log(`⚠️ Dosya bulunamadı, atlanıyor: ${groupName}.json`);
+      continue;
     }
 
-    const categories = await prisma.category.findMany();
-    const getCategoryIdByNameOrContent = (text: string): string | null => {
-      const lower = text.toLowerCase();
-      if (lower.includes('veteriner') || lower.includes('vet') || (lower.includes('klinik') && !lower.includes('diş'))) {
-        return categories.find(c => c.type === 'VETERINER')?.id || null;
-      }
-      if (lower.includes('diş') || lower.includes('dental') || lower.includes('poliklinik') || lower.includes('hastanesi')) {
-        return categories.find(c => c.type === 'DIS_KLINIGI')?.id || null;
-      }
-      if (lower.includes('çilingir') || lower.includes('anahtar') || lower.includes('kilit')) {
-        return categories.find(c => c.type === 'CILINGIR')?.id || null;
-      }
-      if (lower.includes('lastik') || lower.includes('lastikçi')) {
-        return categories.find(c => c.type === 'OTO_LASTIK')?.id || null;
-      }
-      if (lower.includes('çekici') || lower.includes('kurtarma') || lower.includes('yol yardım')) {
-        return categories.find(c => c.type === 'OTO_CEKICI')?.id || null;
-      }
-      return categories[0]?.id || null;
-    };
+    const rawData = fs.readFileSync(jsonPath, 'utf-8');
+    const businesses: BusinessItem[] = JSON.parse(rawData);
+    console.log(`📦 ${groupName}.json dosyasından ${businesses.length} adet kayıt okundu.`);
 
-    const files = fs.readdirSync(dataDir);
-    const jsonFiles = files.filter(file => path.extname(file).toLowerCase() === '.json');
+    for (const b of businesses) {
+      // Kategoriyi kontrol et / oluştur
+      let categoryId = categoriesMap.get(b.categoryName);
+      if (!categoryId) {
+        const typeEnum: any = getCategoryType(b.categoryName);
+        const slug = b.categoryName.toLowerCase()
+          .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
+          .replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
 
-    console.log(`Toplam ${jsonFiles.length} adet JSON dosyası bulundu.`);
-
-    for (const file of jsonFiles) {
-      const filePath = path.join(dataDir, file);
-      console.log(`İşleniyor: ${file}`);
-
-      const fileContent = fs.readFileSync(filePath, 'utf-8');
-      
-      let records: any[];
-      try {
-        records = JSON.parse(fileContent);
-      } catch (parseError) {
-        console.error(`Hata: '${file}' dosyası geçerli bir JSON formatında değil!`);
-        continue;
-      }
-
-      if (!Array.isArray(records)) {
-        console.warn(`Uyarı: '${file}' dosyası bir dizi içermiyor, atlanıyor.`);
-        continue;
-      }
-
-      for (const item of records) {
-        if (!item.name) continue;
-
-        const slug = item.slug ? item.slug : generateSlug(item.name) + '-' + Math.random().toString(36).substring(2, 6);
-        const categoryId = item.categoryId ? item.categoryId : getCategoryIdByNameOrContent(item.name + ' ' + (item.note || ''));
-
-        if (!categoryId) {
-          console.warn(`Kategori bulunamadı, atlanıyor: ${item.name}`);
-          continue;
+        let category = await prisma.category.findUnique({ where: { slug } });
+        if (!category) {
+          category = await prisma.category.create({
+            data: { name: b.categoryName, slug, type: typeEnum }
+          });
         }
-
-        await prisma.place.upsert({
-          where: { slug: slug },
-          update: {
-            name: item.name,
-            phone: item.phone || '',
-            address: item.address || '',
-            city: item.city || 'Bilinmiyor',
-            district: item.district || 'Bilinmiyor',
-            note: item.note || null,
-            categoryId: categoryId,
-          },
-          create: {
-            name: item.name,
-            slug: slug,
-            phone: item.phone || '',
-            address: item.address || '',
-            city: item.city || 'Bilinmiyor',
-            district: item.district || 'Bilinmiyor',
-            note: item.note || null,
-            categoryId: categoryId,
-          },
-        });
+        categoryId = category.id;
+        categoriesMap.set(b.categoryName, categoryId);
       }
-      console.log(`${file} başarıyla aktarıldı.`);
-    }
 
-    console.log('Tüm veriler veritabanına başarıyla aktarıldı!');
-  } catch (error) {
-    console.error('Aktarım sırasında beklenmeyen bir hata oluştu:', error);
-  } finally {
-    await prisma.$disconnect();
-    await pool.end();
+      try {
+        await prisma.place.create({
+          data: {
+            name: b.name,
+            slug: b.slug,
+            phone: b.phone,
+            address: b.address,
+            city: b.city,
+            district: b.district,
+            note: b.note,
+            is24Seven: true,
+            isVerified: false,
+            categoryId: categoryId
+          }
+        });
+        totalSuccessCount++;
+      } catch (err: any) {
+        // Slug çakışması olmasın diye benzersizlik hatası basarsa geçebilir veya loglayabilir
+      }
+    }
+    console.log(`✅ ${groupName} başarıyla işlendi.`);
   }
+
+  console.log(`\n🎉 İşlem Tamam! Toplam ${totalSuccessCount} adet işletme veritabanına aktarıldı.`);
 }
 
-main();
+main()
+  .catch((e) => {
+    console.error('❌ Aktarım sırasında hata oluştu:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+    await pool.end();
+  });

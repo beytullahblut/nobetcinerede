@@ -1,183 +1,130 @@
-const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
-// Doğrudan çalıştırmak istediğiniz grubu buradan seçebilirsiniz ('grup1', 'grup2', 'grup3', 'grup4')
-const activeGroup = 'grup1';
+// Yeni oluşturduğunuz Google Places API anahtarınız
+const API_KEY = 'AIzaSyC6t6Yf34ou-GBTrWyMhX9kix5XzgGbBj4';
+
+const activeGroup = 'grup4';
 
 const cityGroups = {
-  grup1: [
-    "Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın",
-    "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale",
-    "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce"
-  ],
-  grup2: [
-    "Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay",
-    "Iğdır", "Isparta", "İstanbul", "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri",
-    "Kilis", "Kırıkkale", "Kırklareli", "Kırşehir", "Kocaeli", "Konya", "Kütahya"
-  ],
-  grup3: [
-    "Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Osmaniye",
-    "Rize", "Sakarya", "Samsun", "Siirt", "Sinop", "Sivas", "Şanlıurfa"
-  ],
-  grup4: [
-    "Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"
-  ]
+  grup1: ["Adana", "Adıyaman", "Afyonkarahisar", "Ağrı", "Aksaray", "Amasya", "Ankara", "Antalya", "Ardahan", "Artvin", "Aydın", "Balıkesir", "Bartın", "Batman", "Bayburt", "Bilecik", "Bingöl", "Bitlis", "Bolu", "Burdur", "Bursa", "Çanakkale", "Çankırı", "Çorum", "Denizli", "Diyarbakır", "Düzce"],
+  grup2: ["Edirne", "Elazığ", "Erzincan", "Erzurum", "Eskişehir", "Gaziantep", "Giresun", "Gümüşhane", "Hakkari", "Hatay", "Iğdır", "Isparta", "İstanbul", "İzmir", "Kahramanmaraş", "Karabük", "Karaman", "Kars", "Kastamonu", "Kayseri", "Kilis", "Kırıkkale", "Kırklareli", "Kırşehir", "Kocaeli", "Konya", "Kütahya"],
+  grup3: ["Malatya", "Manisa", "Mardin", "Mersin", "Muğla", "Muş", "Nevşehir", "Niğde", "Ordu", "Osmaniye", "Rize", "Sakarya", "Samsun", "Siirt", "Sinop", "Sivas", "Şanlıurfa"],
+  grup4: ["Şırnak", "Tekirdağ", "Tokat", "Trabzon", "Tunceli", "Uşak", "Van", "Yalova", "Yozgat", "Zonguldak"]
 };
 
 const targetCities = cityGroups[activeGroup];
 
 function generateSlug(text) {
-  return text
-    .toLowerCase()
-    .replace(/ğ/g, 'g')
-    .replace(/ü/g, 'u')
-    .replace(/ş/g, 's')
-    .replace(/ı/g, 'i')
-    .replace(/ö/g, 'o')
-    .replace(/ç/g, 'c')
-    .replace(/[^a-z0-9]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '') + '-' + Math.random().toString(36).substring(2, 7);
+  return (text || 'isimsiz').toLowerCase()
+    .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') + '-' + Math.random().toString(36).substring(2, 7);
 }
 
-// Geliştirilmiş Akıllı İlçe Ayıklama Fonksiyonu
-function extractDistrict(address, city) {
-  if (!address) return 'Merkez';
+// Google Places API (New) Text Search ile arama yapma fonksiyonu
+async function searchPlacesWithAPI(query) {
+  const url = 'https://places.googleapis.com/v1/places:searchText';
   
-  // 1. Yol: "İlçe/Şehir" veya "İlçe / Şehir" formatını arar
-  const regexSlash = new RegExp(`([\\wÇĞİÖŞÜçğıöşü\\s]+)\\/\\s?${city}`, 'i');
-  const matchSlash = address.match(regexSlash);
-  
-  if (matchSlash && matchSlash[1]) {
-    const parts = matchSlash[1].trim().split(/[\s,]+/);
-    const lastPart = parts[parts.length - 1];
-    if (lastPart && lastPart.toLowerCase() !== city.toLowerCase()) {
-      return lastPart;
-    }
-  }
-  
-  // 2. Yol: Eğer slash yoksa, adres metninde şehir adını arayıp hemen öncesindeki kelimeyi alır
-  const cleanAddress = address.replace(/[^\wÇĞİÖŞÜçğıöşü\s]/g, ' ');
-  const words = cleanAddress.split(/\s+/).filter(Boolean);
-  const cityIndex = words.findIndex(w => w.toLowerCase() === city.toLowerCase());
-  
-  if (cityIndex > 0) {
-    const potentialDistrict = words[cityIndex - 1];
-    // Eğer önceki kelime posta kodu (sayı) değilse ve şehir adının kendisi değilse ilçe kabul et
-    if (potentialDistrict && !/^\d+$/.test(potentialDistrict) && potentialDistrict.toLowerCase() !== city.toLowerCase()) {
-      return potentialDistrict;
-    }
-  }
-  
-  return 'Merkez';
-}
-
-async function scrapeGroup() {
-  console.log(`🚀 ${activeGroup.toUpperCase()} için Google Maps Scraper başlatılıyor (${targetCities.length} il)...`);
-  
-  const browser = await puppeteer.launch({ 
-    headless: "new",
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--lang=tr-TR'] 
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': API_KEY,
+      'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.shortFormattedAddress,places.nationalPhoneNumber,places.addressComponents,places.location'
+    },
+    body: JSON.stringify({
+      textQuery: query,
+      languageCode: 'tr'
+    })
   });
-  
-  const page = await browser.newPage();
+
+  const data = await response.json();
+  if (data.error) {
+    throw new Error(data.error.message);
+  }
+  return data.places || [];
+}
+
+// Adres bileşenlerinden il ve ilçeyi güvenli bir şekilde ayıklama
+function extractCityAndDistrict(addressComponents, fallbackCity) {
+  let city = fallbackCity;
+  let district = 'Merkez';
+
+  if (Array.isArray(addressComponents)) {
+    for (const comp of addressComponents) {
+      if (comp && Array.isArray(comp.types)) {
+        if (comp.types.includes('administrative_area_level_1')) {
+          city = comp.longText || city;
+        }
+        if (comp.types.includes('administrative_area_level_2')) {
+          district = comp.longText || district;
+        }
+      }
+    }
+  }
+  return { city, district };
+}
+
+async function runApiScraper() {
+  console.log(`🚀 Google Places API ile ${activeGroup.toUpperCase()} taraması başlatılıyor...`);
   const groupResults = [];
 
   for (const city of targetCities) {
-    const categoryTemplates = [
-      `${city} Nöbetçi Çilingir`,
-      `${city} Acil Veteriner`,
-      `${city} 7/24 Oto Lastikçi`,
-      `${city} 7/24 Oto Çekici`,
+    const queries = [
+      `${city} Nöbetçi Çilingir`, 
+      `${city} Acil Veteriner`, 
+      `${city} 7/24 Oto Lastikçi`, 
+      `${city} 7/24 Oto Çekici`, 
       `${city} Acil Diş Kliniği`
     ];
 
-    for (const query of categoryTemplates) {
-      console.log(`🔎 Aratılıyor: ${query}`);
-      const searchUrl = `https://www.google.com/maps/search/${encodeURIComponent(query)}`;
-      
+    for (const query of queries) {
+      console.log(`🔎 API Sorgulanıyor: ${query}`);
       try {
-        await page.goto(searchUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        const places = await searchPlacesWithAPI(query);
 
-        const items = await page.evaluate(() => {
-          const list = [];
-          const elements = document.querySelectorAll('div[role="article"]');
+        for (const p of places) {
+          const name = p.displayName?.text || 'İsimsiz İşletme';
+          const address = p.formattedAddress || `${city} / Merkez`;
+          const phone = p.nationalPhoneNumber || '05000000000';
           
-          elements.forEach((el) => {
-            const title = el.querySelector('div.fontHeadlineSmall')?.innerText || '';
-            
-            const categoryEl = el.querySelector('div.fontBodyMedium > div > span:first-child') || 
-                               el.querySelector('div.fontBodyMedium span');
-            const category = categoryEl?.innerText || '';
-
-            const phone = el.innerText.match(/0\d{3}\s?\d{3}\s?\d{2}\s?\d{2}/)?.[0] || '';
-            
-            const textLines = el.innerText.split('\n').map(line => line.trim()).filter(Boolean);
-            let address = '';
-            let note = '';
-            
-            for (const line of textLines) {
-              if (line !== title && line !== category && !line.includes('05') && !line.includes('⭐') && line.length > 10) {
-                if (!address) {
-                  address = line;
-                } else if (!note) {
-                  note = line;
-                }
-              }
-            }
-            
-            if (title) {
-              list.push({ title, category, phone, address, note });
-            }
-          });
-          return list;
-        });
-
-        items.forEach(item => {
-          let finalCategory = item.category;
-          
-          if (!finalCategory || finalCategory.trim() === '') {
-            const q = query.toLowerCase();
-            if (q.includes('çilingir')) finalCategory = 'Nöbetçi Çilingir';
-            else if (q.includes('veteriner')) finalCategory = 'Acil Veteriner';
-            else if (q.includes('lastikçi')) finalCategory = '7/24 Oto Lastikçi';
-            else if (q.includes('çekici')) finalCategory = '7/24 Oto Çekici';
-            else if (q.includes('diş')) finalCategory = 'Acil Diş Kliniği';
-            else finalCategory = 'Genel';
-          }
+          // İl ve ilçeyi güvenli etiket kontrolüyle alıyoruz
+          const parsedLocation = extractCityAndDistrict(p.addressComponents, city);
 
           groupResults.push({
-            name: item.title,
-            slug: generateSlug(item.title),
-            phone: item.phone || '05000000000',
-            address: item.address || `${city} Merkez`,
-            city: city,
-            district: extractDistrict(item.address, city),
-            note: item.note || '7/24 Acil Hizmet',
-            categoryName: finalCategory
+            name: name,
+            slug: generateSlug(name),
+            phone: phone,
+            address: address,
+            city: parsedLocation.city,
+            district: parsedLocation.district,
+            note: '7/24 Acil Hizmet',
+            categoryName: query.includes('Çilingir') ? 'Nöbetçi Çilingir' :
+                        query.includes('Veteriner') ? 'Acil Veteriner' :
+                        query.includes('Lastikçi') ? '7/24 Oto Lastikçi' :
+                        query.includes('Çekici') ? '7/24 Oto Çekici' : 'Acil Diş Kliniği'
           });
-        });
+        }
 
-        console.log(`✅ ${query} için ${items.length} işletme bulundu.`);
+        console.log(`   └─ Bulunan Kayıt: ${places.length}`);
+        // İstekler arası bekleme
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
       } catch (err) {
-        console.error(`❌ Hata (${query}):`, err.message);
+        console.error(`❌ Google API Hatası (${query}):`, err.message);
       }
     }
   }
 
-  await browser.close();
-
-  const dataDir = path.join(__dirname, '../data/cities');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+  // Sonuçları JSON dosyasına kaydet
+  const outputDir = path.join(__dirname, '../data/cities');
+  if (!fs.existsSync(outputDir)){
+    fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  const outputPath = path.join(dataDir, `${activeGroup}_firmalar.json`);
+  const outputPath = path.join(outputDir, `${activeGroup}_firmalar.json`);
   fs.writeFileSync(outputPath, JSON.stringify(groupResults, null, 2), 'utf-8');
-  
-  console.log(`\n🎉 ${activeGroup.toUpperCase()} tamamlandı! Toplam ${groupResults.length} kayıt kaydedildi: ${outputPath}`);
+  console.log(`\n🎉 İşlem Tamam! Toplam Kayıt: ${groupResults.length}`);
 }
 
-scrapeGroup().catch(console.error);
+runApiScraper().catch(console.error);
