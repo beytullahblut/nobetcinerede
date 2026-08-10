@@ -6,14 +6,15 @@ import PlaceCardClient from "@/components/PlaceCardClient";
 async function SearchResults({ 
   searchParams 
 }: { 
-  searchParams: Promise<{ q?: string; city?: string; district?: string }> 
+  searchParams: Promise<{ q?: string; city?: string; district?: string; sort?: string }> 
 }) {
   const resolvedParams = await searchParams;
   const initialQuery = resolvedParams.q || "";
   const selectedCity = resolvedParams.city || "";
   const selectedDistrict = resolvedParams.district || "";
+  const sortBy = resolvedParams.sort || "rating_desc"; // Varsayılan sıralama
 
-  // Veritabanı Seviyesinde Kesin Filtreleme
+  // Veritabanı Seviyesinde Esnek Filtreleme
   const whereCondition: any = {};
 
   if (selectedCity) {
@@ -25,22 +26,29 @@ async function SearchResults({
 
   if (selectedDistrict && selectedDistrict !== "Tüm İlçeler") {
     whereCondition.district = {
-      equals: selectedDistrict,
+      contains: selectedDistrict,
       mode: "insensitive",
     };
   }
 
-  // Verileri ve kategorileri filtrelenmiş şekilde çekiyoruz
-  // İsterseniz orderBy kısmını rating'e göre de ayarlayabilirsiniz
+  // Dinamik Sıralama Kriteri Belirleme
+  let orderByCondition: any = [{ rating: "desc" }, { userRatingCount: "desc" }];
+
+  if (sortBy === "rating_desc") {
+    orderByCondition = [{ rating: "desc" }, { userRatingCount: "desc" }];
+  } else if (sortBy === "reviews_desc") {
+    orderByCondition = [{ userRatingCount: "desc" }, { rating: "desc" }];
+  } else if (sortBy === "newest") {
+    orderByCondition = [{ createdAt: "desc" }];
+  }
+
+  // Verileri ve kategorileri filtrelenmiş ve sıralanmış şekilde çekiyoruz
   const places = await prisma.place.findMany({
     where: whereCondition,
     include: {
       category: true,
     },
-    orderBy: [
-      { rating: "desc" },         // Önce yüksek puanlılar
-      { userRatingCount: "desc" } // Sonra yorum sayısı fazla olanlar
-    ],
+    orderBy: orderByCondition,
   });
 
   // Arama kutusuna (q) kelime yazıldıysa filtreleme yapıyoruz
@@ -60,9 +68,19 @@ async function SearchResults({
     });
   });
 
+  // URL parametrelerini koruyarak sıralama linki oluşturan yardımcı fonksiyon
+  const createSortUrl = (sortType: string) => {
+    const params = new URLSearchParams();
+    if (initialQuery) params.set("q", initialQuery);
+    if (selectedCity) params.set("city", selectedCity);
+    if (selectedDistrict) params.set("district", selectedDistrict);
+    params.set("sort", sortType);
+    return `/arama?${params.toString()}`;
+  };
+
   return (
     <main className="container" style={{ padding: "2rem 1rem", maxWidth: "1000px", margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
         <h2 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#0f172a" }}>
           {selectedCity ? `${selectedCity} / ${selectedDistrict && selectedDistrict !== "Tüm İlçeler" ? selectedDistrict : "Tüm İlçeler"}` : "Arama Sonuçları"} ({results.length})
         </h2>
@@ -71,6 +89,56 @@ async function SearchResults({
           style={{ fontSize: "0.9rem", color: "#dc2626", fontWeight: 600, textDecoration: "none" }}
         >
           ← Ana Sayfaya Dön
+        </Link>
+      </div>
+
+      {/* Sıralama Butonları */}
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", flexWrap: "wrap", alignItems: "center" }}>
+        <span style={{ fontSize: "0.85rem", color: "#64748b", fontWeight: 600 }}>Sırala:</span>
+        <Link 
+          href={createSortUrl("rating_desc")}
+          style={{
+            padding: "0.4rem 0.8rem",
+            borderRadius: "6px",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            textDecoration: "none",
+            backgroundColor: sortBy === "rating_desc" ? "#2563eb" : "#ffffff",
+            color: sortBy === "rating_desc" ? "#ffffff" : "#475569",
+            border: "1px solid #cbd5e1"
+          }}
+        >
+          ⭐ En Yüksek Puan
+        </Link>
+        <Link 
+          href={createSortUrl("reviews_desc")}
+          style={{
+            padding: "0.4rem 0.8rem",
+            borderRadius: "6px",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            textDecoration: "none",
+            backgroundColor: sortBy === "reviews_desc" ? "#2563eb" : "#ffffff",
+            color: sortBy === "reviews_desc" ? "#ffffff" : "#475569",
+            border: "1px solid #cbd5e1"
+          }}
+        >
+          💬 En Çok Yorum
+        </Link>
+        <Link 
+          href={createSortUrl("newest")}
+          style={{
+            padding: "0.4rem 0.8rem",
+            borderRadius: "6px",
+            fontSize: "0.85rem",
+            fontWeight: 600,
+            textDecoration: "none",
+            backgroundColor: sortBy === "newest" ? "#2563eb" : "#ffffff",
+            color: sortBy === "newest" ? "#ffffff" : "#475569",
+            border: "1px solid #cbd5e1"
+          }}
+        >
+          🕒 En Yeni Eklenen
         </Link>
       </div>
 
@@ -110,7 +178,7 @@ async function SearchResults({
 export default function SearchPage({ 
   searchParams 
 }: { 
-  searchParams: Promise<{ q?: string; city?: string; district?: string }> 
+  searchParams: Promise<{ q?: string; city?: string; district?: string; sort?: string }> 
 }) {
   return (
     <div style={{ backgroundColor: "#f8fafc", minHeight: "100vh", color: "#0f172a" }}>

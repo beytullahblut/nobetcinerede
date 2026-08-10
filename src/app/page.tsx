@@ -17,6 +17,7 @@ import {
   Zap,
   Truck,
   Pill,
+  SlidersHorizontal,
 } from "lucide-react";
 
 import ilData from "@/data/il.json";
@@ -28,6 +29,7 @@ export default function HomePage() {
   const [selectedCityName, setSelectedCityName] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedSort, setSelectedSort] = useState("rating_desc"); // Sıralama state'i eklendi
 
   // il.json yapısını çözer ve Türkçe karakterlere uygun olarak A'dan Z'ye sıralar
   const ilList = useMemo(() => {
@@ -95,17 +97,20 @@ export default function HomePage() {
     setSelectedDistrict("");
   };
 
-const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     
     const params = new URLSearchParams();
     
-    // İl ve ilçeyi doğrudan kendi parametreleri olarak ekliyoruz
+    // İl ve ilçeyi kendi parametreleri olarak ekliyoruz
     if (selectedCityName) params.append("city", selectedCityName);
     if (selectedDistrict) params.append("district", selectedDistrict);
     
-    // Kategoriyi veya arama metnini q parametresi olarak ekliyoruz
+    // Kategoriyi q parametresi olarak ekliyoruz
     if (selectedCategory) params.append("q", selectedCategory);
+
+    // Sıralama tercihini ekliyoruz
+    if (selectedSort) params.append("sort", selectedSort);
 
     router.push(`/arama?${params.toString()}`);
   };
@@ -149,7 +154,7 @@ const handleSearch = (e: React.FormEvent) => {
             İhtiyacınız Olduğu An En Yakın Nöbetçi Hizmeti Bulun
           </h1>
           <p style={{ color: "#94a3b8", fontSize: "1rem", marginBottom: "2rem" }}>
-            Gece veteriner, çilingir, lastikçi, oto çekici, diş kliniği ve nöbetçi eczane arayışlarınızda harita destekli doğruluk.
+            İl, ilçe ve akıllı sıralama filtreleriyle; gece veteriner, çilingir, lastikçi, oto çekici, diş kliniği ve nöbetçi eczane arayışlarınızda en doğru sonuca anında ulaşın.
           </p>
 
           {/* DİNAMİK ARAMA FORMU */}
@@ -169,7 +174,7 @@ const handleSearch = (e: React.FormEvent) => {
             }}
           >
             {/* İL SEÇİMİ */}
-            <div style={{ flex: "1 1 160px" }}>
+            <div style={{ flex: "1 1 140px" }}>
               <select
                 value={selectedCityId}
                 onChange={handleCityChange}
@@ -193,7 +198,7 @@ const handleSearch = (e: React.FormEvent) => {
             </div>
 
             {/* İLÇE SEÇİMİ */}
-            <div style={{ flex: "1 1 160px" }}>
+            <div style={{ flex: "1 1 140px" }}>
               <select
                 value={selectedDistrict}
                 onChange={(e) => setSelectedDistrict(e.target.value)}
@@ -219,7 +224,7 @@ const handleSearch = (e: React.FormEvent) => {
             </div>
 
             {/* KATEGORİ SEÇİMİ */}
-            <div style={{ flex: "1 1 180px" }}>
+            <div style={{ flex: "1 1 150px" }}>
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
@@ -242,8 +247,30 @@ const handleSearch = (e: React.FormEvent) => {
               </select>
             </div>
 
+            {/* SIRALAMA SEÇİMİ */}
+            <div style={{ flex: "1 1 140px" }}>
+              <select
+                value={selectedSort}
+                onChange={(e) => setSelectedSort(e.target.value)}
+                style={{
+                  width: "100%",
+                  height: "48px",
+                  boxSizing: "border-box",
+                  color: "#0f172a",
+                  borderRadius: "8px",
+                  border: "1px solid #cbd5e1",
+                  padding: "0 0.75rem",
+                  backgroundColor: "#ffffff",
+                }}
+              >
+                <option value="rating_desc">⭐ En Yüksek Puan</option>
+                <option value="reviews_desc">💬 En Çok Yorum</option>
+                <option value="newest">🕒 En Yeni Eklenen</option>
+              </select>
+            </div>
+
             {/* BUTON */}
-            <div style={{ flex: "1 1 130px" }}>
+            <div style={{ flex: "1 1 120px" }}>
               <button
                 type="submit"
                 style={{
@@ -380,7 +407,7 @@ const handleSearch = (e: React.FormEvent) => {
               <div>
                 <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#991b1b" }}>Türkiye Geneli Nöbetçi Eczaneler Listesi</h3>
                 <p style={{ fontSize: "0.88rem", color: "#64748b", marginTop: "0.2rem" }}>
-                  Tüm il ve ilçelerdeki güncel nöbetçi eczanelere tek tıkla anında ulaşın.
+                  Tüm il, ilçe ve sıralama filtreleriyle güncel nöbetçi eczanelere tek tıkla anında ulaşın.
                 </p>
               </div>
             </div>
@@ -402,14 +429,14 @@ const handleSearch = (e: React.FormEvent) => {
         >
           <div style={{ maxWidth: "750px", margin: "0 auto", textAlign: "center" }}>
             <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "#dc2626", textTransform: "uppercase" }}>
-              Açık ve Ulaşılabilir Bilgi
+              Akıllı Arama ve Sıralama Altyapısı
             </span>
             <h2 style={{ fontSize: "1.6rem", fontWeight: 800, marginTop: "0.4rem", marginBottom: "1rem" }}>
               nobetcinerede.com Ne İçin Var? Amaçlarımız Neler?
             </h2>
             <p style={{ color: "#475569", fontSize: "0.95rem", lineHeight: 1.6, marginBottom: "2rem" }}>
               Gece yarısı veteriner, kapıda kaldığınızda çilingir, yolda kaldığınızda çekici ya da lastikçi ararken zamanla yarışırsınız.
-              Amacımız, en acil anlarınızda konumunuza en yakın ve aktif olarak hizmet veren işletmelerin adres, telefon ve harita konumlarına tek tıkla ulaşmanızı sağlamaktır.
+              Gelişmiş il/ilçe filtreleri ve puana/yoruma göre sıralama seçeneklerimizle; en acil anlarınızda konumunuza en yakın ve en yüksek puanlı aktif işletmelere saniyeler içinde ulaşmanızı sağlıyoruz.
             </p>
           </div>
 
@@ -422,10 +449,10 @@ const handleSearch = (e: React.FormEvent) => {
             }}
           >
             <div style={{ backgroundColor: "#f8fafc", padding: "1.25rem", borderRadius: "12px", border: "1px solid #f1f5f9" }}>
-              <Clock size={24} color="#dc2626" style={{ marginBottom: "0.5rem" }} />
-              <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "0.25rem" }}>Zaman Kaybını Önlemek</h3>
+              <SlidersHorizontal size={24} color="#dc2626" style={{ marginBottom: "0.5rem" }} />
+              <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "0.25rem" }}>Akıllı Sıralama & Filtreleme</h3>
               <p style={{ fontSize: "0.85rem", color: "#64748b" }}>
-                Kapanmış dükkanların numaralarıyla vakit kaybetmeden doğrudan açık mekanlara ulaşmanızı sağlıyoruz.
+                En yüksek puanlı, en çok yorum alan veya en yeni eklenen nöbetçi hizmetleri tercihlerinize göre anında listeleyin.
               </p>
             </div>
 
@@ -433,7 +460,7 @@ const handleSearch = (e: React.FormEvent) => {
               <MapPin size={24} color="#2563eb" style={{ marginBottom: "0.5rem" }} />
               <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "0.25rem" }}>Doğrudan Harita Navigasyonu</h3>
               <p style={{ fontSize: "0.85rem", color: "#64748b" }}>
-                Adres aramak yerine Google Maps entegrasyonuyla canlı rota oluşturarak hızlıca ulaşın.
+                Adres aramak yerine Google Maps entegrasyonuyla canlı rota oluşturarak en hızlı şekilde ulaşın.
               </p>
             </div>
 

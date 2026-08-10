@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Phone, MapPin, CheckCircle, Search } from "lucide-react";
+import { Phone, MapPin, CheckCircle, Search, Star, ExternalLink } from "lucide-react";
 
 export default function PlaceCardClient({ place, destinationQuery, categoryName }: { place: any; destinationQuery: string; categoryName: string }) {
   const handleDirectionsClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
@@ -41,7 +41,6 @@ export default function PlaceCardClient({ place, destinationQuery, categoryName 
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          {/* Sabit metin kaldırıldı, dışarıdan gelen gerçek kategori adı basılıyor */}
           <span
             style={{
               fontSize: "0.75rem",
@@ -67,6 +66,38 @@ export default function PlaceCardClient({ place, destinationQuery, categoryName 
       </div>
 
       <p style={{ fontSize: "0.9rem", color: "#334155" }}>{place.address}</p>
+
+      {/* GOOGLE PUAN VE YORUM / LİNKE AİT ALAN */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", backgroundColor: "#f8fafc", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #e2e8f0", flexWrap: "wrap", gap: "0.5rem" }}>
+        {place.rating > 0 ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+            <Star size={16} style={{ fill: "#f59e0b", color: "#f59e0b" }} />
+            <span style={{ fontWeight: 700, color: "#0f172a", fontSize: "0.9rem" }}>{place.rating}</span>
+            <span style={{ color: "#64748b", fontSize: "0.85rem" }}>({place.userRatingCount || 0} değerlendirme)</span>
+          </div>
+        ) : (
+          <span style={{ color: "#94a3b8", fontSize: "0.85rem" }}>Google değerlendirmesi bulunmuyor</span>
+        )}
+
+        {place.googleMapsUri && (
+          <a
+            href={place.googleMapsUri}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.25rem",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              color: "#2563eb",
+              textDecoration: "none",
+            }}
+          >
+            Google Yorumları <ExternalLink size={14} />
+          </a>
+        )}
+      </div>
 
       {/* HARİTA ALANI */}
       <div style={{ width: "100%", height: "180px", borderRadius: "8px", overflow: "hidden", border: "1px solid #cbd5e1" }}>
