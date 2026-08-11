@@ -173,10 +173,10 @@ export default function SearchFilterClient({ initialCity, initialDistrict, initi
         >
           <option value="">Hizmet / Kategori...</option>
           <option value="Acil Veteriner">Acil Veteriner</option>
-          <option value="Çilingir">Çilingir</option>
-          <option value="Oto Çekici">Oto Çekici</option>
-          <option value="Diş Kliniği">Diş Kliniği</option>
-          <option value="Lastikçi">Lastikçi</option>
+          <option value="Çilingir">Nöbetçi Çilingir</option>
+          <option value="Oto Çekici">7/24 Oto Çekici</option>
+          <option value="Diş Kliniği">Acil Diş Kliniği</option>
+          <option value="Lastikçi">7/24 Oto Lastikçi</option>
         </select>
       </div>
 
