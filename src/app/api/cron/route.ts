@@ -5,13 +5,11 @@ import { Pool } from 'pg';
 import fs from 'fs';
 import path from 'path';
 
-// Neon bağlantı havuzu için pg Pool yapılandırması
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 export async function GET(request: Request) {
-  // 1. Güvenlik Kontrolü
   const authHeader = request.headers.get('authorization');
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return new NextResponse('Unauthorized', { status: 401 });
@@ -30,6 +28,43 @@ export async function GET(request: Request) {
         const placesData = JSON.parse(fileContent);
 
         for (const item of placesData) {
+          // 1. Önce categoryName'e ait kategori veritabanında var mı diye bulalım / oluşturalım
+          let categoryId = item.categoryId;
+
+          if (!categoryId && item.categoryName) {
+            // Slug üretmek için basit bir yardımcı
+            const categorySlug = item.categoryName
+              .toLowerCase()
+              .replace(/ğ/g, 'g')
+              .replace(/ü/g, 'u')
+              .replace(/ş/g, 's')
+              .replace(/ı/g, 'i')
+              .replace(/ö/g, 'o')
+              .replace(/ç/g, 'c')
+              .replace(/[^a-z0-9]/g, '-');
+
+            let category = await prisma.category.findUnique({
+              where: { slug: categorySlug },
+            });
+
+            if (!category) {
+              // Eğer kategori yoksa otomatik oluşturalım
+              category = await prisma.category.create({
+                data: {
+                  name: item.categoryName,
+                  slug: categorySlug,
+                  type: 'OTO_CEKICI', // Şemanızdaki CategoryType enum'ına göre varsayılan bir tür
+                },
+              });
+            }
+            categoryId = category.id;
+          }
+
+          if (!categoryId) {
+            continue; // Kategori bulunamadıysa bu kaydı atla
+          }
+
+          // 2. Upsert İşlemi
           await prisma.place.upsert({
             where: { slug: item.slug },
             update: {
@@ -39,8 +74,10 @@ export async function GET(request: Request) {
               city: item.city,
               district: item.district,
               rating: item.rating,
+              userRatingCount: item.userRatingCount,
               googleMapsUri: item.googleMapsUri,
-              categoryId: item.categoryId,
+              note: item.note,
+              categoryId: categoryId,
             },
             create: {
               name: item.name,
@@ -49,7 +86,11 @@ export async function GET(request: Request) {
               address: item.address,
               city: item.city,
               district: item.district,
-              categoryId: item.categoryId,
+              rating: item.rating,
+              userRatingCount: item.userRatingCount,
+              googleMapsUri: item.googleMapsUri,
+              note: item.note,
+              categoryId: categoryId,
               isVerified: false,
             },
           });
@@ -60,7 +101,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Veriler yerel dosyadan başarıyla güncellendi.',
+      message: 'Veriler ve kategoriler başarıyla senkronize edildi.',
       totalProcessed: updatedCount 
     });
 
