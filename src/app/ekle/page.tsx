@@ -171,8 +171,8 @@ function FormContent() {
           </h2>
           <p style={{ color: "#64748b", fontSize: "0.95rem", marginBottom: "1.5rem" }}>
             {!isClaim
-              ? "İşletme kaydınız başarıyla oluşturuldu ve rehberde yayına alındı."
-              : "Güncelleme / kaldırma talebiniz editör onayına gönderilmiştir. İnceleme sonrası işleme alınacaktır."}
+              ? "İşletme kaydınız başarıyla oluşturuldu, rehberde yayına alındı ve yönetime e-posta bildirimi gönderildi."
+              : "Güncelleme / kaldırma talebiniz editör onayına gönderilmiş ve iletişime (iletisim@nobetcinerede.com) e-posta ile bildirilmiştir."}
           </p>
           <Link href="/" className="search-button" style={{ display: "inline-block", textDecoration: "none" }}>
             Ana Sayfaya Dön
@@ -213,7 +213,7 @@ function FormContent() {
               }}
             >
               <Zap size={20} style={{ flexShrink: 0 }} />
-              Bu form ile eklenen yeni işletmeler onay beklemeksizin anında haritada ve rehberde görünür.
+              Bu form ile eklenen yeni işletmeler onay beklemeksizin anında haritada görünür ve yönetime mail iletilir.
             </div>
           )}
 

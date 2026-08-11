@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendNewRequestEmail } from "@/lib/mail";
 
 export async function POST(req: Request) {
   try {
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
           )}`,
           {
             headers: {
-              "User-Agent": "DurustevApp/1.0",
+              "User-Agent": "NobetciNeredeApp/1.0",
             },
           }
         );
@@ -85,6 +86,7 @@ export async function POST(req: Request) {
           "nobetci-cilingir": { name: "Nöbetçi Çilingir", type: "CILINGIR" },
           "7-24-oto-lastikci": { name: "7/24 Oto Lastikçi", type: "OTO_LASTIK" },
           "acil-dis-klinigi": { name: "Acil Diş Kliniği", type: "DIS_KLINIGI" },
+          "7-24-yol-yardim-cekici": { name: "7/24 Yol Yardım / Çekici", type: "YOL_YARDIM" },
         };
 
         const config = categoryConfig[targetCategoryId] || { name: targetCategoryId, type: "VETERINER" };
@@ -121,6 +123,16 @@ export async function POST(req: Request) {
         },
       });
 
+      // E-posta Bildirimi Gönder
+      await sendNewRequestEmail({
+        name,
+        type: "CREATE",
+        city,
+        district,
+        phone,
+        note,
+      });
+
       return NextResponse.json(
         { message: "İşletme başarıyla oluşturuldu.", data: newPlace },
         { status: 201 }
@@ -128,7 +140,17 @@ export async function POST(req: Request) {
     }
 
     // 3. Güncelleme / Silme veya Onay Bekleyen Talep Oluşturma (PlaceRequest)
-    // DELETE işleminde name, phone vb. alanlar boş geleceği için undefined yerine null gitmesini sağlıyoruz.
+    let validCategoryId: string | null = null;
+    
+    if (type === "UPDATE" && categoryId) {
+      const existingCategory = await prisma.category.findUnique({
+        where: { id: categoryId },
+      });
+      if (existingCategory) {
+        validCategoryId = categoryId;
+      }
+    }
+
     const newRequest = await prisma.placeRequest.create({
       data: {
         type,
@@ -139,9 +161,19 @@ export async function POST(req: Request) {
         address: address || null,
         city: city || null,
         district: district || null,
-        categoryId: categoryId || null,
+        categoryId: validCategoryId,
         note: note || null,
       },
+    });
+
+    // E-posta Bildirimi Gönder
+    await sendNewRequestEmail({
+      name: name || "Silinecek İşletme / Kayıt",
+      type,
+      city: city || undefined,
+      district: district || undefined,
+      phone: phone || undefined,
+      note,
     });
 
     return NextResponse.json(
