@@ -174,7 +174,6 @@ export default function SearchFilterClient({ initialCity, initialDistrict, initi
           <option value="">Hizmet / Kategori...</option>
           <option value="Acil Veteriner">Acil Veteriner</option>
           <option value="Çilingir">Çilingir</option>
-          <option value="Nöbetçi Eczane">Nöbetçi Eczane</option>
           <option value="Oto Çekici">Oto Çekici</option>
           <option value="Diş Kliniği">Diş Kliniği</option>
           <option value="Lastikçi">Lastikçi</option>
