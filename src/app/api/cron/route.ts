@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 import fs from 'fs';
 import path from 'path';
 
-const prisma = new PrismaClient();
+// Neon bağlantı havuzu için pg Pool yapılandırması
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 export async function GET(request: Request) {
   // 1. Güvenlik Kontrolü
@@ -13,13 +18,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 2. Proje içindeki data klasöründen verileri okuma
-    // Vercel'de process.cwd() proje kök dizinini verir
     const dataDir = path.join(process.cwd(), 'data', 'cities');
     const files = fs.readdirSync(dataDir);
 
     let updatedCount = 0;
-    let createdCount = 0;
 
     for (const file of files) {
       if (file.endsWith('.json')) {
@@ -27,7 +29,6 @@ export async function GET(request: Request) {
         const fileContent = fs.readFileSync(filePath, 'utf-8');
         const placesData = JSON.parse(fileContent);
 
-        // 3. Upsert İşlemi
         for (const item of placesData) {
           await prisma.place.upsert({
             where: { slug: item.slug },
