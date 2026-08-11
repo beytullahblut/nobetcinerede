@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import PlaceCardClient from "@/components/PlaceCardClient";
+import SearchFilterClient from "@/components/SearchBox";
 
 async function SearchResults({ 
   searchParams 
@@ -10,74 +11,119 @@ async function SearchResults({
 }) {
   const resolvedParams = await searchParams;
   const initialQuery = resolvedParams.q || "";
-  const selectedCity = resolvedParams.city || "";
-  const selectedDistrict = resolvedParams.district || "";
-  const sortBy = resolvedParams.sort || "rating_desc"; // Varsayılan sıralama
+  const selectedCity = resolvedParams.city || "Bursa";
+  const selectedDistrict = resolvedParams.district || "Tüm İlçeler";
+  const sortBy = resolvedParams.sort || "rating_desc";
 
-  // Veritabanı Seviyesinde Esnek Filtreleme (İl, İlçe ve Kategori)
-  const whereCondition: any = {};
-
-  if (selectedCity) {
-    whereCondition.city = {
-      equals: selectedCity,
-      mode: "insensitive",
-    };
-  }
-
-  if (selectedDistrict && selectedDistrict !== "Tüm İlçeler") {
-    whereCondition.district = {
-      contains: selectedDistrict,
-      mode: "insensitive",
-    };
-  }
-
-  // Kategori seçimi (q parametresi) veritabanı seviyesinde ilişki üzerinden filtreleniyor
-  if (initialQuery) {
-    whereCondition.OR = [
-      {
-        name: {
-          contains: initialQuery,
-          mode: "insensitive",
-        },
-      },
-      {
-        address: {
-          contains: initialQuery,
-          mode: "insensitive",
-        },
-      },
-      {
-        category: {
-          name: {
-            contains: initialQuery,
-            mode: "insensitive",
-          },
-        },
-      },
-    ];
-  }
-
-  // Dinamik Sıralama Kriteri Belirleme
-  let orderByCondition: any = [{ rating: "desc" }, { userRatingCount: "desc" }];
-
-  if (sortBy === "rating_desc") {
-    orderByCondition = [{ rating: "desc" }, { userRatingCount: "desc" }];
-  } else if (sortBy === "reviews_desc") {
-    orderByCondition = [{ userRatingCount: "desc" }, { rating: "desc" }];
-  } else if (sortBy === "newest") {
-    orderByCondition = [{ createdAt: "desc" }];
-  }
-
-  // Verileri doğrudan filtrelenmiş ve sıralanmış şekilde çekiyoruz
-  const results = await prisma.place.findMany({
-    where: whereCondition,
-    include: {
-      category: true,
-    },
-    orderBy: orderByCondition,
+  const allPlaces = await prisma.place.findMany({
+    include: { category: true },
   });
 
-  // URL parametrelerini koruyarak sıralama linki oluşturan yardımcı fonksiyon
+  const filteredResults = allPlaces.filter((place: any) => {
+    // 1. Şehir Filtresi
+    if (selectedCity && selectedCity !== "Tüm Şehirler") {
+      const placeCity = (place.city || "").toLowerCase();
+      const queryCity = selectedCity.trim().toLowerCase();
+      if (!placeCity.includes(queryCity)) return false;
+    }
+
+    // 2. İlçe Filtresi
+    if (selectedDistrict && selectedDistrict !== "Tüm İlçeler") {
+      const placeDistrict = (place.district || "").toLowerCase();
+      const queryDistrict = selectedDistrict.trim().toLowerCase();
+      
+      const normalizeText = (text: string) => 
+        text.toLowerCase()
+          .replace(/İ/g, "i")
+          .replace(/ı/g, "i")
+          .replace(/I/g, "i")
+          .replace(/Ü/g, "u")
+          .replace(/ü/g, "u")
+          .replace(/Ş/g, "s")
+          .replace(/ş/g, "s")
+          .replace(/Ç/g, "c")
+          .replace(/ç/g, "c")
+          .replace(/Ö/g, "o")
+          .replace(/ö/g, "o")
+          .replace(/Ğ/g, "g")
+          .replace(/ğ/g, "g");
+
+      const normPlaceDistrict = normalizeText(place.district || "");
+      const normQueryDistrict = normalizeText(selectedDistrict);
+
+      const isDistrictMatch = 
+        placeDistrict.includes(queryDistrict) || 
+        normPlaceDistrict.includes(normQueryDistrict);
+
+      if (!isDistrictMatch) return false;
+    }
+
+    // 3. Kategori / Kelime Arama Filtresi
+    if (initialQuery) {
+      const q = initialQuery.trim().toLowerCase();
+      const placeName = (place.name || "").toLowerCase();
+      const categoryName = (place.category?.name || "").toLowerCase();
+      const placeNote = (place.note || "").toLowerCase();
+      const placeAddress = (place.address || "").toLowerCase();
+      const categoryId = (place.categoryId || "").toLowerCase();
+
+      if (q.includes("veteriner") || q.includes("acil-veteriner")) {
+        const isVetMatch = 
+          categoryName.includes("veteriner") || 
+          placeName.includes("veteriner") || 
+          placeNote.includes("veteriner") || 
+          placeAddress.includes("veteriner") ||
+          categoryId.includes("veteriner");
+        
+        if (!isVetMatch) return false;
+      } else if (q.includes("diş") || q.includes("dis")) {
+        if (!(categoryName.includes("diş") || categoryName.includes("dis") || placeName.includes("diş") || categoryId.includes("dis"))) return false;
+      } else if (q.includes("çilingir") || q.includes("cilingir")) {
+        if (!(categoryName.includes("çilingir") || categoryName.includes("cilingir") || placeName.includes("çilingir"))) return false;
+      } else if (q.includes("lastikçi") || q.includes("lastikci")) {
+        if (!(categoryName.includes("lastikçi") || categoryName.includes("lastikci") || placeName.includes("lastik"))) return false;
+      } else if (q.includes("çekici") || q.includes("cekici")) {
+        if (!(categoryName.includes("çekici") || categoryName.includes("cekici") || placeName.includes("çekici"))) return false;
+      } else {
+        const isQueryMatch = 
+          categoryName.includes(q) || 
+          placeName.includes(q) || 
+          placeNote.includes(q) || 
+          placeAddress.includes(q) ||
+          categoryId.includes(q);
+
+        if (!isQueryMatch) return false;
+      }
+    }
+
+    return true;
+  });
+
+  // Mükerrer kayıtları engelleme
+  const uniqueMap = new Map();
+  filteredResults.forEach((place: any) => {
+    const cleanName = (place.name || "").trim().toLowerCase();
+    const cleanAddress = (place.address || "").trim().toLowerCase();
+    const uniqueKey = `${cleanName}-${cleanAddress}`;
+
+    if (!uniqueMap.has(uniqueKey)) {
+      uniqueMap.set(uniqueKey, place);
+    }
+  });
+
+  const finalCleanResults = Array.from(uniqueMap.values()) as any[];
+
+  // Sıralama Mantığı
+  finalCleanResults.sort((a: any, b: any) => {
+    if (sortBy === "reviews_desc") {
+      return (b.userRatingCount || 0) - (a.userRatingCount || 0) || (b.rating || 0) - (a.rating || 0);
+    } else if (sortBy === "newest") {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    } else {
+      return (b.rating || 0) - (a.rating || 0) || (b.userRatingCount || 0) - (a.userRatingCount || 0);
+    }
+  });
+
   const createSortUrl = (sortType: string) => {
     const params = new URLSearchParams();
     if (initialQuery) params.set("q", initialQuery);
@@ -89,9 +135,10 @@ async function SearchResults({
 
   return (
     <main className="container" style={{ padding: "2rem 1rem", maxWidth: "1000px", margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+      {/* Üst Bilgi ve Ana Sayfa Linki */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
         <h2 style={{ fontSize: "1.4rem", fontWeight: 800, color: "#0f172a" }}>
-          {selectedCity ? `${selectedCity} / ${selectedDistrict && selectedDistrict !== "Tüm İlçeler" ? selectedDistrict : "Tüm İlçeler"}` : "Arama Sonuçları"} {initialQuery ? `- "${initialQuery}"` : ""} ({results.length})
+          {selectedCity} / {selectedDistrict} {initialQuery ? `- "${initialQuery}"` : ""} ({finalCleanResults.length})
         </h2>
         <Link 
           href="/" 
@@ -100,6 +147,13 @@ async function SearchResults({
           ← Ana Sayfaya Dön
         </Link>
       </div>
+
+      {/* Ana Sayfadaki Gibi Açılır Menü (Dropdown) Filtre Alanı */}
+      <SearchFilterClient 
+        initialCity={selectedCity} 
+        initialDistrict={selectedDistrict} 
+        initialQuery={initialQuery} 
+      />
 
       {/* Sıralama Butonları */}
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", flexWrap: "wrap", alignItems: "center" }}>
@@ -147,25 +201,26 @@ async function SearchResults({
             border: "1px solid #cbd5e1"
           }}
         >
-          🕒 En Yeni Eklenen
+            🕒 En Yeni Eklenen
         </Link>
       </div>
 
-      {results.length === 0 ? (
+      {/* Sonuç Listesi */}
+      {finalCleanResults.length === 0 ? (
         <div style={{ backgroundColor: "#ffffff", padding: "2rem", borderRadius: "12px", textAlign: "center", border: "1px solid #e2e8f0" }}>
           <p style={{ color: "#64748b", fontSize: "1rem" }}>
             Seçtiğiniz kriterlere uygun açık nöbetçi işletme bulunamadı.
           </p>
           <Link 
             href="/" 
-            style={{ display: "inline-block", marginTop: "1rem", padding: "0.5rem 1rem", backgroundColor: "#dc2626", color: "#fff", borderRadius: "6px", textDecoration: "none", fontWeight: 600 }}
+            style={{ display: "inline-top", marginTop: "1rem", padding: "0.5rem 1rem", backgroundColor: "#dc2626", color: "#fff", borderRadius: "6px", textDecoration: "none", fontWeight: 600 }}
           >
             Ana Sayfaya Dön
           </Link>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {results.map((place: any) => {
+          {finalCleanResults.map((place: any) => {
             const destinationQuery = `${place.name}, ${place.address}, ${place.district}/${place.city}`;
             const categoryName = place.category?.name || "Nöbetçi İşletme";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Search,
@@ -17,7 +17,7 @@ import {
   Zap,
   Truck,
   Pill,
-  SlidersHorizontal,
+  ChevronDown,
 } from "lucide-react";
 
 import ilData from "@/data/il.json";
@@ -29,6 +29,31 @@ export default function HomePage() {
   const [selectedCityName, setSelectedCityName] = useState("");
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+
+  const [isCityDropdownOpen, setIsCityDropdownOpen] = useState(false);
+  const cityDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [isDistrictDropdownOpen, setIsDistrictDropdownOpen] = useState(false);
+  const districtDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (cityDropdownRef.current && !cityDropdownRef.current.contains(event.target as Node)) {
+        setIsCityDropdownOpen(false);
+      }
+      if (districtDropdownRef.current && !districtDropdownRef.current.contains(event.target as Node)) {
+        setIsDistrictDropdownOpen(false);
+      }
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const ilList = useMemo(() => {
     let raw = ilData as any;
@@ -46,11 +71,47 @@ export default function HomePage() {
         name: String(item.name || item.il_adi || item.title || "Bilinmeyen İl").trim(),
       }));
 
-      return parsed.sort((a, b) => a.name.localeCompare(b.name, "tr"));
+      // Türkçe karakterleri güvenli şekilde küçük harfe çeviren yardımcı fonksiyon
+      const normalizeTr = (str: string) => {
+        return str
+          .replace(/İ/g, "i")
+          .replace(/I/g, "ı")
+          .toLowerCase()
+          .replace(/î/g, "i");
+      };
+
+      const topCitiesNormalized = ["istanbul", "ankara", "izmir", "bursa", "antalya"];
+
+      return parsed.sort((a, b) => {
+        const nameA = normalizeTr(a.name);
+        const nameB = normalizeTr(b.name);
+
+        const indexA = topCitiesNormalized.indexOf(nameA);
+        const indexB = topCitiesNormalized.indexOf(nameB);
+
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB;
+        }
+        if (indexA !== -1) {
+          return -1;
+        }
+        if (indexB !== -1) {
+          return 1;
+        }
+        return a.name.localeCompare(b.name, "tr");
+      });
     }
 
     return [];
   }, []);
+
+  const topCityIds = useMemo(() => {
+    const normalizeTr = (str: string) => str.replace(/İ/g, "i").replace(/I/g, "ı").toLowerCase();
+    const topNamesNormalized = ["istanbul", "ankara", "izmir", "bursa", "antalya"];
+    return ilList
+      .filter((c) => topNamesNormalized.includes(normalizeTr(c.name)))
+      .map((c) => c.id);
+  }, [ilList]);
 
   const ilceList = useMemo(() => {
     let raw = ilceData as any;
@@ -80,14 +141,29 @@ export default function HomePage() {
     return ilceList.filter((d) => String(d.il_id) === String(selectedCityId));
   }, [selectedCityId, ilceList]);
 
-  const handleCityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const cityId = e.target.value;
+  const categories = [
+    "Acil Veteriner",
+    "Nöbetçi Çilingir",
+    "7/24 Oto Lastikçi",
+    "7/24 Oto Çekici",
+    "Acil Diş Kliniği",
+  ];
+
+  const handleCitySelect = (cityId: string, cityName: string) => {
     setSelectedCityId(cityId);
-
-    const foundCity = ilList.find((c) => String(c.id) === String(cityId));
-    setSelectedCityName(foundCity ? foundCity.name : "");
-
+    setSelectedCityName(cityName);
     setSelectedDistrict("");
+    setIsCityDropdownOpen(false);
+  };
+
+  const handleDistrictSelect = (districtName: string) => {
+    setSelectedDistrict(districtName);
+    setIsDistrictDropdownOpen(false);
+  };
+
+  const handleCategorySelect = (categoryName: string) => {
+    setSelectedCategory(categoryName);
+    setIsCategoryDropdownOpen(false);
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -95,6 +171,7 @@ export default function HomePage() {
     
     const params = new URLSearchParams();
     
+    // Veritabanındaki alan adlarıyla (city, district, q) tam uyumlu olacak şekilde ayarlıyoruz
     if (selectedCityName) params.append("city", selectedCityName);
     if (selectedDistrict) params.append("district", selectedDistrict);
     if (selectedCategory) params.append("q", selectedCategory);
@@ -158,34 +235,101 @@ export default function HomePage() {
               boxSizing: "border-box",
             }}
           >
-            <div style={{ flex: "1 1 180px" }}>
-              <select
-                value={selectedCityId}
-                onChange={handleCityChange}
+            {/* İL SEÇİMİ */}
+            <div style={{ flex: "1 1 180px", position: "relative" }} ref={cityDropdownRef}>
+              <div
+                onClick={() => setIsCityDropdownOpen(!isCityDropdownOpen)}
                 style={{
                   width: "100%",
                   height: "48px",
                   boxSizing: "border-box",
-                  color: selectedCityId ? "#0f172a" : "#64748b",
+                  color: selectedCityName ? "#0f172a" : "#64748b",
                   borderRadius: "8px",
                   border: "1px solid #cbd5e1",
                   padding: "0 0.75rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: "#ffffff",
+                  cursor: "pointer",
+                  fontSize: "0.95rem",
+                  fontWeight: selectedCityName ? 600 : 400,
                 }}
               >
-                <option value="">İl Seçin...</option>
-                {ilList.map((city) => (
-                  <option key={city.id} value={city.id}>
-                    {city.name}
-                  </option>
-                ))}
-              </select>
+                <span>{selectedCityName || "İl Seçin..."}</span>
+                <ChevronDown size={16} color="#64748b" />
+              </div>
+
+              {isCityDropdownOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 4px)",
+                    left: 0,
+                    width: "100%",
+                    maxHeight: "260px",
+                    overflowY: "auto",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
+                    zIndex: 50,
+                    textAlign: "left",
+                  }}
+                >
+                  <div
+                    onClick={() => handleCitySelect("", "")}
+                    style={{
+                      padding: "0.6rem 0.75rem",
+                      cursor: "pointer",
+                      color: "#64748b",
+                      fontSize: "0.9rem",
+                      borderBottom: "1px solid #f1f5f9",
+                    }}
+                  >
+                    İl Seçin...
+                  </div>
+
+                  {ilList.map((city, index) => {
+                    const isTopCity = topCityIds.includes(city.id);
+                    const isNextToDivider = index === 4;
+
+                    return (
+                      <div key={city.id}>
+                        <div
+                          onClick={() => handleCitySelect(city.id, city.name)}
+                          style={{
+                            padding: "0.6rem 0.75rem",
+                            cursor: "pointer",
+                            fontSize: "0.9rem",
+                            fontWeight: isTopCity ? 800 : 400,
+                            color: isTopCity ? "#0f172a" : "#334155",
+                            backgroundColor: selectedCityId === city.id ? "#f1f5f9" : "transparent",
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.backgroundColor =
+                              selectedCityId === city.id ? "#f1f5f9" : "transparent")
+                          }
+                        >
+                          {city.name}
+                        </div>
+                        {isNextToDivider && (
+                          <div style={{ height: "2px", backgroundColor: "#cbd5e1", margin: "2px 0" }} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
-            <div style={{ flex: "1 1 180px" }}>
-              <select
-                value={selectedDistrict}
-                onChange={(e) => setSelectedDistrict(e.target.value)}
-                disabled={!selectedCityId}
+            {/* İLÇE SEÇİMİ */}
+            <div style={{ flex: "1 1 180px", position: "relative" }} ref={districtDropdownRef}>
+              <div
+                onClick={() => {
+                  if (selectedCityId) setIsDistrictDropdownOpen(!isDistrictDropdownOpen);
+                }}
                 style={{
                   width: "100%",
                   height: "48px",
@@ -195,21 +339,78 @@ export default function HomePage() {
                   borderRadius: "8px",
                   border: "1px solid #cbd5e1",
                   padding: "0 0.75rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: "#ffffff",
+                  cursor: selectedCityId ? "pointer" : "not-allowed",
+                  fontSize: "0.95rem",
+                  fontWeight: selectedDistrict ? 600 : 400,
                 }}
               >
-                <option value="">İlçe Seçin...</option>
-                {availableDistricts.map((dist) => (
-                  <option key={dist.id} value={dist.name}>
-                    {dist.name}
-                  </option>
-                ))}
-              </select>
+                <span>{selectedDistrict || "İlçe Seçin..."}</span>
+                <ChevronDown size={16} color="#64748b" />
+              </div>
+
+              {isDistrictDropdownOpen && selectedCityId && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 4px)",
+                    left: 0,
+                    width: "100%",
+                    maxHeight: "260px",
+                    overflowY: "auto",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
+                    zIndex: 50,
+                    textAlign: "left",
+                  }}
+                >
+                  <div
+                    onClick={() => handleDistrictSelect("")}
+                    style={{
+                      padding: "0.6rem 0.75rem",
+                      cursor: "pointer",
+                      color: "#64748b",
+                      fontSize: "0.9rem",
+                      borderBottom: "1px solid #f1f5f9",
+                    }}
+                  >
+                    İlçe Seçin...
+                  </div>
+
+                  {availableDistricts.map((dist) => (
+                    <div
+                      key={dist.id}
+                      onClick={() => handleDistrictSelect(dist.name)}
+                      style={{
+                        padding: "0.6rem 0.75rem",
+                        cursor: "pointer",
+                        fontSize: "0.9rem",
+                        fontWeight: 400,
+                        color: "#334155",
+                        backgroundColor: selectedDistrict === dist.name ? "#f1f5f9" : "transparent",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor =
+                          selectedDistrict === dist.name ? "#f1f5f9" : "transparent")
+                      }
+                    >
+                      {dist.name}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <div style={{ flex: "1 1 200px" }}>
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
+            {/* HİZMET / KATEGORİ SEÇİMİ */}
+            <div style={{ flex: "1 1 200px", position: "relative" }} ref={categoryDropdownRef}>
+              <div
+                onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
                 style={{
                   width: "100%",
                   height: "48px",
@@ -218,15 +419,72 @@ export default function HomePage() {
                   borderRadius: "8px",
                   border: "1px solid #cbd5e1",
                   padding: "0 0.75rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  backgroundColor: "#ffffff",
+                  cursor: "pointer",
+                  fontSize: "0.95rem",
+                  fontWeight: selectedCategory ? 600 : 400,
                 }}
               >
-                <option value="">Hizmet / Kategori...</option>
-                <option value="Acil Veteriner">Acil Veteriner</option>
-                <option value="Nöbetçi Çilingir">Nöbetçi Çilingir</option>
-                <option value="7/24 Oto Lastikçi">7/24 Oto Lastikçi</option>
-                <option value="7/24 Oto Çekici">7/24 Oto Çekici</option>
-                <option value="Acil Diş Kliniği">Acil Diş Kliniği</option>
-              </select>
+                <span>{selectedCategory || "Hizmet / Kategori..."}</span>
+                <ChevronDown size={16} color="#64748b" />
+              </div>
+
+              {isCategoryDropdownOpen && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "calc(100% + 4px)",
+                    left: 0,
+                    width: "100%",
+                    maxHeight: "260px",
+                    overflowY: "auto",
+                    backgroundColor: "#ffffff",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "8px",
+                    boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
+                    zIndex: 50,
+                    textAlign: "left",
+                  }}
+                >
+                  <div
+                    onClick={() => handleCategorySelect("")}
+                    style={{
+                      padding: "0.6rem 0.75rem",
+                      cursor: "pointer",
+                      color: "#64748b",
+                      fontSize: "0.9rem",
+                      borderBottom: "1px solid #f1f5f9",
+                    }}
+                  >
+                    Hizmet / Kategori...
+                  </div>
+
+                  {categories.map((cat, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => handleCategorySelect(cat)}
+                      style={{
+                        padding: "0.6rem 0.75rem",
+                        cursor: "pointer",
+                        fontSize: "0.9rem",
+                        fontWeight: 400,
+                        color: "#334155",
+                        backgroundColor: selectedCategory === cat ? "#f1f5f9" : "transparent",
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f8fafc")}
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.backgroundColor =
+                          selectedCategory === cat ? "#f1f5f9" : "transparent")
+                      }
+                    >
+                      {cat}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div style={{ flex: "1 1 140px" }}>
