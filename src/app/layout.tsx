@@ -1,6 +1,7 @@
 // src/app/layout.tsx
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import Script from "next/script"; // 1. Script bileşenini içeri aktarıyoruz
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
@@ -34,6 +35,15 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="tr">
+      <head>
+        {/* 2. AdSense kodunu <head> etiketleri arasına ekliyoruz */}
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5403653799496940"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
+      </head>
       <body style={{ minHeight: "100vh", display: "flex", flexDirection: "column", backgroundColor: "#f8fafc", margin: 0 }}>
         <Header />
         <div style={{ flex: 1 }}>{children}</div>
